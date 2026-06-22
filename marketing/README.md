@@ -40,4 +40,4 @@ dbt build      # requires the platform producer deployed in dbt platform
 > Cross-project `ref('platform', …)` resolves against the producer's production
 > publication artifact in the dbt platform. If `platform` has not been deployed,
 > the build fails while downloading that artifact — deploy the producer first
-> (top-level [`LABS.md`](../LABS.md), Lab 3).
+> (top-level [`README.md`](../README.md), Module 5).
