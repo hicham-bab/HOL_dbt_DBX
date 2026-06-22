@@ -50,4 +50,4 @@ dbt build --vars '{raw_catalog: main, raw_schema: hicham_babahmed_retail}'
 Consumers resolve `ref('platform', …)` from this project's **production
 environment** publication artifact in the dbt platform. Deploy `platform`
 (run a production job) before the consumers can build. See the top-level
-[`LABS.md`](../LABS.md), Lab 3.
+[`README.md`](../README.md), Module 5.
