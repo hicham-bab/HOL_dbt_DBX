@@ -1,0 +1,25 @@
+name: 'marketing'
+version: '1.0.0'
+profile: 'marketing'
+
+# dbt Fusion (Rust engine) — no config-version key
+require-dbt-version: [">=1.9.0"]
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  marketing:
+    # Marts only — this domain consumes governed models from `platform` and
+    # builds its own analytics on top. Comments persist into Unity Catalog.
+    +materialized: table
+    +persist_docs:
+      relation: true
+      columns: true

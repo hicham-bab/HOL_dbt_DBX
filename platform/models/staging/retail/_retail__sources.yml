@@ -1,0 +1,63 @@
+version: 2
+
+sources:
+  - name: retail
+    description: >
+      Raw retail data landed by Fivetran from PostgreSQL into Databricks Unity
+      Catalog. Every table carries Fivetran metadata columns `_fivetran_synced`
+      (load timestamp) and `_fivetran_deleted` (soft-delete flag).
+    database: "{{ var('raw_catalog') }}"
+    schema: "{{ var('raw_schema') }}"
+    # In dbt 1.9+/Fusion, source freshness lives under config:. On Databricks
+    # Fusion, freshness can also be derived from warehouse metadata; we keep
+    # loaded_at_field since Fivetran lands _fivetran_synced on every table.
+    config:
+      freshness:
+        warn_after: {count: 12, period: hour}
+        error_after: {count: 24, period: hour}
+      loaded_at_field: _fivetran_synced
+
+    tables:
+      - name: customers
+        description: Retail (B2C) customers with address, tax and loyalty attributes. May contain SCD validity windows from the source system.
+        columns:
+          - name: id
+            description: Fivetran-synced primary key (row identifier).
+          - name: customer_id
+            description: Business customer identifier.
+
+      - name: loyalty_segments
+        description: Reference table describing each loyalty segment and its unit threshold.
+        columns:
+          - name: loyalty_segment_id
+            description: Primary key of the loyalty segment.
+
+      - name: ret_customers
+        description: B2B customer accounts.
+        columns:
+          - name: id
+            description: Primary key of the B2B account.
+
+      - name: ret_orders
+        description: Orders placed by B2B accounts.
+        columns:
+          - name: id
+            description: Primary key of the order.
+          - name: order_user_id
+            description: Foreign key to ret_customers.id.
+
+      - name: ret_tickets
+        description: Support tickets raised by B2B accounts.
+        columns:
+          - name: id
+            description: Primary key of the support ticket.
+          - name: ticket_user_id
+            description: Foreign key to ret_customers.id.
+
+      - name: sales_orders
+        description: E-commerce orders, including a semi-structured product line-item payload (ordered_products).
+        columns:
+          - name: id
+            description: Primary key of the e-commerce order.
+          - name: ordered_products
+            description: Array/JSON of ordered product line items (product id, name, price, qty).

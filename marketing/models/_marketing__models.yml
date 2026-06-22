@@ -1,0 +1,47 @@
+version: 2
+
+models:
+  - name: mart_customer_loyalty
+    description: >
+      Revenue, basket value and units aggregated by loyalty segment and region.
+      Built in the marketing domain from the platform producer's governed
+      dim_customers and fct_sales. Feeds the customer_loyalty_dashboard exposure.
+    columns:
+      - name: loyalty_segment
+        description: Loyalty segment identifier.
+        data_tests:
+          - not_null
+      - name: loyalty_segment_description
+        description: Human-readable loyalty segment description.
+      - name: region
+        description: Sales region.
+      - name: customer_count
+        description: Distinct customers in the segment/region.
+      - name: order_count
+        description: Distinct orders in the segment/region.
+      - name: total_units
+        description: Total units sold in the segment/region.
+      - name: total_revenue
+        description: Total line revenue in the segment/region.
+      - name: avg_basket_value
+        description: Total revenue divided by distinct order count.
+
+  - name: mart_segment_region_rollup
+    description: >
+      Region-level performance: active customers, segment diversity, revenue,
+      and how many customers meet their loyalty unit threshold. Built from the
+      platform producer's dim_customers, fct_sales and dim_loyalty_segments.
+    columns:
+      - name: region
+        description: Sales region.
+        data_tests:
+          - unique
+          - not_null
+      - name: active_customers
+        description: Distinct customers with sales in the region.
+      - name: distinct_segments
+        description: Number of distinct loyalty segments active in the region.
+      - name: total_revenue
+        description: Total line revenue in the region.
+      - name: customers_meeting_threshold
+        description: Customers whose lifetime units meet or exceed their segment's unit threshold.

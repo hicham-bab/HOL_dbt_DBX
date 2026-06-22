@@ -1,0 +1,7 @@
+version: 2
+
+groups:
+  - name: retail
+    owner:
+      name: Retail Analytics Engineering
+      email: hicham.babahmed@dbtlabs.com

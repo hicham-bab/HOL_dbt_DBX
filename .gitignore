@@ -1,0 +1,18 @@
+# dbt artifacts
+target/
+dbt_packages/
+logs/
+.dbt/
+
+# local profiles & secrets (use profiles.yml.example as the template)
+profiles.yml
+.env
+.envrc
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# dbt Fusion local user file
+.user.yml

@@ -1,0 +1,42 @@
+name: 'platform'
+version: '1.0.0'
+profile: 'platform'
+
+# dbt Fusion (Rust engine) — no config-version key
+require-dbt-version: [">=1.9.0"]
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+analysis-paths: ["analyses"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# Raw data location. The Fivetran destination schema lives in Unity Catalog.
+# Override per environment with: dbt build --vars '{raw_catalog: my_cat, raw_schema: my_schema}'
+vars:
+  raw_catalog: main
+  raw_schema: hicham_babahmed_retail
+
+models:
+  platform:
+    # Push model + column descriptions into Unity Catalog comments.
+    +persist_docs:
+      relation: true
+      columns: true
+    staging:
+      +materialized: view
+    intermediate:
+      +materialized: ephemeral
+    marts:
+      +materialized: table
+
+snapshots:
+  platform:
+    +persist_docs:
+      relation: true
+      columns: true

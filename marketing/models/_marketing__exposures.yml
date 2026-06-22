@@ -1,0 +1,17 @@
+version: 2
+
+exposures:
+  - name: customer_loyalty_dashboard
+    label: Customer Loyalty Dashboard
+    type: dashboard
+    maturity: high
+    description: >
+      Databricks AI/BI dashboard summarizing revenue, basket value and units by
+      loyalty segment and region for the retail leadership team.
+    url: https://adb-1234567890.12.azuredatabricks.net/sql/dashboards/customer-loyalty
+    depends_on:
+      - ref('mart_customer_loyalty')
+      - ref('mart_segment_region_rollup')
+    owner:
+      name: Marketing Analytics
+      email: hicham.babahmed@dbtlabs.com

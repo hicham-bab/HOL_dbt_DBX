@@ -1,0 +1,153 @@
+version: 2
+
+models:
+  - name: stg_retail__customers
+    description: Cleaned, typed B2C customers. One row per source customer record. Soft-deleted rows removed.
+    columns:
+      - name: customer_id
+        description: Surrogate primary key (Fivetran row id) for the customer record.
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_business_key
+        description: Business-facing customer identifier as used by the e-commerce platform.
+      - name: customer_name
+        description: Customer full name.
+      - name: loyalty_segment
+        description: Loyalty segment identifier the customer currently belongs to. Joins to stg_retail__loyalty_segments.loyalty_segment_id.
+      - name: region
+        description: Sales region of the customer's address.
+      - name: state
+        description: State / province of the customer's address.
+      - name: city
+        description: City of the customer's address.
+      - name: units_purchased
+        description: Lifetime units purchased, used to derive loyalty segment.
+      - name: latitude
+        description: Geocoded latitude of the address.
+      - name: longitude
+        description: Geocoded longitude of the address.
+      - name: valid_from
+        description: Start of the source-system validity window for this record.
+      - name: valid_to
+        description: End of the source-system validity window for this record (null if current).
+      - name: _fivetran_synced
+        description: Timestamp Fivetran last synced this row.
+
+  - name: stg_retail__loyalty_segments
+    description: Loyalty segment reference data. One row per segment.
+    columns:
+      - name: loyalty_segment_id
+        description: Primary key of the loyalty segment.
+        data_tests:
+          - unique
+          - not_null
+      - name: loyalty_segment_description
+        description: Human-readable description of the segment.
+      - name: unit_threshold
+        description: Minimum lifetime units required to qualify for the segment.
+      - name: _fivetran_synced
+        description: Timestamp Fivetran last synced this row.
+
+  - name: stg_retail__ret_customers
+    description: Cleaned, typed B2B customer accounts. One row per account.
+    columns:
+      - name: ret_customer_id
+        description: Primary key of the B2B account.
+        data_tests:
+          - unique
+          - not_null
+      - name: contact_name
+        description: Primary contact name on the account.
+      - name: company_name
+        description: Company name of the B2B account.
+      - name: email
+        description: Primary contact email.
+      - name: region
+        description: Sales region of the account.
+      - name: customer_start_date
+        description: Date the account relationship began.
+      - name: _fivetran_synced
+        description: Timestamp Fivetran last synced this row.
+
+  - name: stg_retail__ret_orders
+    description: Cleaned, typed B2B orders. One row per order.
+    columns:
+      - name: order_id
+        description: Primary key of the order.
+        data_tests:
+          - unique
+          - not_null
+      - name: ret_customer_id
+        description: Foreign key to stg_retail__ret_customers.ret_customer_id.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_retail__ret_customers')
+                field: ret_customer_id
+      - name: order_amount
+        description: Total monetary amount of the order.
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: order_status
+        description: Lifecycle status of the order.
+        data_tests:
+          - not_null
+          # TODO: verify against raw data — these are placeholder enum values.
+          - accepted_values:
+              arguments:
+                values: ['completed', 'pending', 'shipped', 'cancelled', 'returned']
+      - name: cancel_return_reason
+        description: Free-text reason supplied when an order is cancelled or returned.
+      - name: created_at
+        description: Timestamp the order was created.
+
+  - name: stg_retail__ret_tickets
+    description: Cleaned, typed B2B support tickets. One row per ticket.
+    columns:
+      - name: ticket_id
+        description: Primary key of the support ticket.
+        data_tests:
+          - unique
+          - not_null
+      - name: ret_customer_id
+        description: Foreign key to stg_retail__ret_customers.ret_customer_id.
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_retail__ret_customers')
+                field: ret_customer_id
+      - name: issue_type
+        description: Category of the reported issue.
+      - name: ticket_status
+        description: Lifecycle status of the ticket.
+        data_tests:
+          - not_null
+          # TODO: verify against raw data — these are placeholder enum values.
+          - accepted_values:
+              arguments:
+                values: ['open', 'pending', 'escalated', 'closed', 'resolved']
+      - name: created_at
+        description: Timestamp the ticket was created.
+
+  - name: stg_retail__sales_orders
+    description: Cleaned, typed e-commerce orders. One row per order; product line items remain nested in ordered_products.
+    columns:
+      - name: sales_order_id
+        description: Primary key of the e-commerce order.
+        data_tests:
+          - unique
+          - not_null
+      - name: order_number
+        description: Human-facing order number.
+      - name: order_datetime
+        description: Order placement timestamp, normalized from epoch/ISO via the normalize_timestamp macro.
+      - name: customer_id
+        description: Business customer identifier placing the order.
+      - name: number_of_line_items
+        description: Count of distinct product line items on the order.
+      - name: ordered_products
+        description: Nested array/JSON of ordered product line items (exploded in int_sales__order_items).

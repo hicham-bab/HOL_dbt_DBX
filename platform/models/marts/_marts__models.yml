@@ -1,0 +1,237 @@
+version: 2
+
+models:
+  # ---------------------------------------------------------------------------
+  # Public interface models (Mesh): access=public, contract enforced, owned by
+  # the `retail` group. Databricks PRIMARY KEY / FOREIGN KEY constraints are
+  # declared here — dbt emits them to Unity Catalog (informational, RELY-style)
+  # the same way contracts enforce the column shape.
+  # ---------------------------------------------------------------------------
+  - name: dim_customers
+    description: >
+      B2C customer dimension, one row per current customer, enriched with loyalty
+      segment attributes. Public, contracted interface model owned by the retail group.
+    config:
+      contract:
+        enforced: true
+      access: public
+      group: retail
+    constraints:
+      # customer_business_key is the natural key consumers join to, so it is the
+      # referential target for fct_sales' foreign key below.
+      - type: primary_key
+        columns: [customer_business_key]
+    columns:
+      - name: customer_id
+        description: Surrogate key of the customer record (Fivetran row id).
+        data_type: bigint
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_business_key
+        description: Business customer identifier used by the e-commerce platform; joins to fct_sales.customer_id.
+        data_type: string
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - not_null
+      - name: customer_name
+        description: Customer full name.
+        data_type: string
+      - name: loyalty_segment
+        description: Loyalty segment identifier the customer belongs to.
+        data_type: string
+      - name: loyalty_segment_description
+        description: Human-readable loyalty segment description.
+        data_type: string
+      - name: region
+        description: Sales region of the customer's address.
+        data_type: string
+      - name: state
+        description: State / province of the customer's address.
+        data_type: string
+      - name: city
+        description: City of the customer's address.
+        data_type: string
+      - name: units_purchased
+        description: Lifetime units purchased by the customer.
+        data_type: bigint
+      - name: unit_threshold
+        description: Minimum lifetime units required for the customer's loyalty segment.
+        data_type: bigint
+
+  - name: fct_sales
+    description: >
+      E-commerce sales fact at the order line-item grain. Incremental (merge).
+      Public, contracted interface model owned by the retail group.
+    config:
+      contract:
+        enforced: true
+      access: public
+      group: retail
+    constraints:
+      - type: primary_key
+        columns: [sales_order_line_id]
+      - type: foreign_key
+        columns: [customer_id]
+        to: ref('dim_customers')
+        to_columns: [customer_business_key]
+    columns:
+      - name: sales_order_line_id
+        description: Surrogate primary key for the order line item (hash of order_number + product_id).
+        data_type: string
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - not_null
+      - name: sales_order_id
+        description: Identifier of the parent order.
+        data_type: bigint
+      - name: order_number
+        description: Human-facing order number.
+        data_type: string
+      - name: customer_id
+        description: Business customer identifier; relates to dim_customers.customer_business_key.
+        data_type: string
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_customers')
+                field: customer_business_key
+      - name: product_id
+        description: Identifier of the ordered product.
+        data_type: string
+      - name: product_name
+        description: Name of the ordered product.
+        data_type: string
+      - name: order_datetime
+        description: Order placement timestamp (incremental key).
+        data_type: timestamp
+      - name: unit_price
+        description: Price of a single unit of the product.
+        data_type: double
+      - name: quantity
+        description: Quantity ordered on this line.
+        data_type: bigint
+      - name: line_revenue
+        description: Line-level revenue (unit_price * quantity).
+        data_type: double
+
+  - name: fct_orders
+    description: >
+      B2B order fact, one row per order, with cancel/return flags. Public,
+      contracted interface model owned by the retail group (consumed by finance).
+    config:
+      contract:
+        enforced: true
+      access: public
+      group: retail
+    constraints:
+      - type: primary_key
+        columns: [order_id]
+    columns:
+      - name: order_id
+        description: Primary key of the order.
+        data_type: bigint
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - not_null
+      - name: ret_customer_id
+        description: B2B account that placed the order.
+        data_type: bigint
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_retail__ret_customers')
+                field: ret_customer_id
+      - name: order_amount
+        description: Total monetary amount of the order.
+        data_type: decimal(18,2)
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: order_status
+        description: Lifecycle status of the order.
+        data_type: string
+      - name: cancel_return_reason
+        description: Free-text reason supplied when an order is cancelled or returned.
+        data_type: string
+      - name: created_at
+        description: Timestamp the order was created.
+        data_type: timestamp
+      - name: is_cancelled
+        description: True when the order status indicates a cancellation.
+        data_type: boolean
+      - name: is_returned
+        description: True when the order status indicates a return.
+        data_type: boolean
+      - name: has_cancel_return_reason
+        description: True when a cancel/return reason was supplied.
+        data_type: boolean
+
+  - name: dim_loyalty_segments
+    description: >
+      Loyalty segment dimension, one row per segment. Public, contracted
+      interface model owned by the retail group.
+    config:
+      contract:
+        enforced: true
+      access: public
+      group: retail
+    constraints:
+      - type: primary_key
+        columns: [loyalty_segment_id]
+    columns:
+      - name: loyalty_segment_id
+        description: Primary key of the loyalty segment.
+        data_type: string
+        constraints:
+          - type: not_null
+        data_tests:
+          - unique
+          - not_null
+      - name: loyalty_segment_description
+        description: Human-readable loyalty segment description.
+        data_type: string
+      - name: unit_threshold
+        description: Minimum lifetime units required to qualify for the segment.
+        data_type: bigint
+
+  # ---------------------------------------------------------------------------
+  # Internal mart: access=protected (not exposed across the Mesh).
+  # ---------------------------------------------------------------------------
+  - name: fct_support_tickets
+    description: B2B support ticket fact, one row per ticket.
+    config:
+      access: protected
+    columns:
+      - name: ticket_id
+        description: Primary key of the support ticket.
+        data_tests:
+          - unique
+          - not_null
+      - name: ret_customer_id
+        description: B2B account that raised the ticket.
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_retail__ret_customers')
+                field: ret_customer_id
+      - name: issue_type
+        description: Category of the reported issue.
+      - name: ticket_status
+        description: Lifecycle status of the ticket.
+      - name: created_at
+        description: Timestamp the ticket was created.
+      - name: is_open
+        description: True when the ticket is not yet closed/resolved.

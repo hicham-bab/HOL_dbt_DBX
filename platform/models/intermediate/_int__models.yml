@@ -1,0 +1,45 @@
+version: 2
+
+models:
+  - name: int_sales__order_items
+    description: >
+      One row per e-commerce order line item, exploded from
+      stg_retail__sales_orders.ordered_products, with line revenue computed as
+      unit_price * quantity. Ephemeral — inlined into downstream marts.
+    columns:
+      - name: sales_order_id
+        description: Order the line item belongs to.
+      - name: order_number
+        description: Human-facing order number.
+      - name: customer_id
+        description: Business customer identifier placing the order.
+      - name: order_datetime
+        description: Order placement timestamp.
+      - name: product_id
+        description: Identifier of the ordered product.
+      - name: product_name
+        description: Name of the ordered product.
+      - name: unit_price
+        description: Price of a single unit of the product.
+      - name: quantity
+        description: Quantity of the product ordered on this line.
+      - name: line_revenue
+        description: Line-level revenue (unit_price * quantity).
+
+  - name: int_customers__enriched
+    description: >
+      Current B2C customers joined to their loyalty segment reference data.
+      Deduplicated to one row per customer business key. Ephemeral.
+    columns:
+      - name: customer_id
+        description: Surrogate primary key of the customer record.
+      - name: customer_business_key
+        description: Business customer identifier.
+      - name: loyalty_segment
+        description: Loyalty segment identifier.
+      - name: loyalty_segment_description
+        description: Human-readable loyalty segment description.
+      - name: unit_threshold
+        description: Minimum lifetime units required for the segment.
+      - name: units_purchased
+        description: Lifetime units purchased by the customer.

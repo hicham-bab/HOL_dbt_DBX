@@ -1,0 +1,4 @@
+# dbt Mesh: declare the upstream producer project so finance models can use
+# {{ ref('platform', '<model>') }} against governed, contracted models.
+projects:
+  - name: platform

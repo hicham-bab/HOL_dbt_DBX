@@ -1,0 +1,105 @@
+version: 2
+
+semantic_models:
+  # ---------------------------------------------------------------------------
+  # Sales fact — carries the measures used by all metrics. The customer entity
+  # lets MetricFlow join to the customers semantic model for region / segment.
+  # ---------------------------------------------------------------------------
+  - name: sales
+    description: Sales fact at the order line-item grain.
+    model: ref('fct_sales')
+    defaults:
+      agg_time_dimension: order_date
+    entities:
+      - name: sales_order_line
+        type: primary
+        expr: sales_order_line_id
+      - name: customer
+        type: foreign
+        expr: customer_id
+    dimensions:
+      - name: order_date
+        type: time
+        expr: order_datetime
+        type_params:
+          time_granularity: day
+    measures:
+      - name: revenue
+        description: Sum of line revenue.
+        agg: sum
+        expr: line_revenue
+      - name: units
+        description: Sum of quantity ordered.
+        agg: sum
+        expr: quantity
+      - name: distinct_orders
+        description: Count of distinct orders.
+        agg: count_distinct
+        expr: order_number
+      - name: distinct_customers
+        description: Count of distinct purchasing customers.
+        agg: count_distinct
+        expr: customer_id
+
+  # ---------------------------------------------------------------------------
+  # Customer dimension — no measures, so no agg_time_dimension required.
+  # Provides region and loyalty_segment for grouping the sales metrics.
+  # ---------------------------------------------------------------------------
+  - name: customers
+    description: Customer dimension providing grouping attributes for sales metrics.
+    model: ref('dim_customers')
+    entities:
+      - name: customer
+        type: primary
+        expr: customer_business_key
+    dimensions:
+      - name: region
+        type: categorical
+      - name: loyalty_segment
+        type: categorical
+
+metrics:
+  - name: total_revenue
+    description: Total line revenue across all sales.
+    label: Total Revenue
+    type: simple
+    type_params:
+      measure: revenue
+
+  - name: total_units
+    description: Total units sold.
+    label: Total Units
+    type: simple
+    type_params:
+      measure: units
+
+  # Helper metrics used as ratio denominators.
+  - name: total_orders
+    description: Distinct order count.
+    label: Total Orders
+    type: simple
+    type_params:
+      measure: distinct_orders
+
+  - name: total_customers
+    description: Distinct purchasing customer count.
+    label: Total Customers
+    type: simple
+    type_params:
+      measure: distinct_customers
+
+  - name: avg_basket_value
+    description: Total revenue divided by distinct order count.
+    label: Average Basket Value
+    type: ratio
+    type_params:
+      numerator: total_revenue
+      denominator: total_orders
+
+  - name: revenue_per_customer
+    description: Total revenue divided by distinct purchasing customers.
+    label: Revenue per Customer
+    type: ratio
+    type_params:
+      numerator: total_revenue
+      denominator: total_customers

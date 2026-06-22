@@ -1,0 +1,43 @@
+version: 2
+
+models:
+  - name: fct_daily_revenue
+    description: >
+      Daily e-commerce revenue, units and order counts. Materialized as a
+      Databricks materialized view, built from the governed platform.fct_sales.
+    config:
+      materialized: materialized_view
+    columns:
+      - name: order_date
+        description: Calendar date of the orders.
+        data_tests:
+          - unique
+          - not_null
+      - name: order_count
+        description: Distinct orders placed on the date.
+      - name: total_units
+        description: Total units sold on the date.
+      - name: total_revenue
+        description: Total line revenue on the date.
+      - name: avg_order_value
+        description: Total revenue divided by distinct order count.
+
+  - name: mart_b2b_orders
+    description: >
+      B2B order economics by date and status: gross vs net booked amount after
+      cancellations and returns. Built from the governed platform.fct_orders.
+    columns:
+      - name: order_date
+        description: Calendar date the order was created.
+      - name: order_status
+        description: Lifecycle status of the order.
+      - name: order_count
+        description: Number of orders in the date/status bucket.
+      - name: gross_amount
+        description: Sum of order amount before cancellations/returns.
+      - name: net_booked_amount
+        description: Sum of order amount excluding cancelled/returned orders.
+      - name: cancelled_orders
+        description: Count of cancelled orders.
+      - name: returned_orders
+        description: Count of returned orders.

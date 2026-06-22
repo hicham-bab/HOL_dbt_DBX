@@ -1,0 +1,6 @@
+# dbt Mesh: declare the upstream producer project. This lets models here
+# reference governed, contracted models from `platform` with
+# {{ ref('platform', '<model>') }}. On the dbt platform, cross-project ref
+# resolves against the producer's production environment manifest.
+projects:
+  - name: platform

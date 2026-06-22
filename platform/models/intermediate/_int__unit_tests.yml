@@ -1,0 +1,55 @@
+version: 2
+
+# Unit tests validate transformation LOGIC against mocked inputs — they do not
+# touch the warehouse data. They run in seconds with `dbt test --select test_type:unit`
+# and are the dbt answer to "how do I test the SQL, not just the data?".
+
+unit_tests:
+  # ---------------------------------------------------------------------------
+  # The nested-payload explode is the trickiest logic in the project: one order
+  # row with an array of products must fan out to one row per product, with
+  # line_revenue = unit_price * quantity. We mock the array<struct> input with
+  # format: sql so we can hand-build the nested type, then assert the exploded
+  # output exactly.
+  # ---------------------------------------------------------------------------
+  - name: explode_order_items_fans_out_and_computes_line_revenue
+    model: int_sales__order_items
+    given:
+      - input: ref('stg_retail__sales_orders')
+        format: sql
+        rows: |
+          select
+            cast(1 as bigint)                       as sales_order_id,
+            cast('ORD-1' as string)                 as order_number,
+            cast('CUST-1' as string)                as customer_id,
+            cast('2025-01-01 00:00:00' as timestamp) as order_datetime,
+            array(
+              named_struct('id', 'P1', 'name', 'Widget', 'price', cast(10.00 as double), 'qty', cast(2 as bigint)),
+              named_struct('id', 'P2', 'name', 'Gadget', 'price', cast(5.00 as double),  'qty', cast(3 as bigint))
+            )                                       as ordered_products
+    expect:
+      rows:
+        - {sales_order_id: 1, order_number: 'ORD-1', customer_id: 'CUST-1', product_id: 'P1', product_name: 'Widget', unit_price: 10.0, quantity: 2, line_revenue: 20.0}
+        - {sales_order_id: 1, order_number: 'ORD-1', customer_id: 'CUST-1', product_id: 'P2', product_name: 'Gadget', unit_price: 5.0,  quantity: 3, line_revenue: 15.0}
+
+  # ---------------------------------------------------------------------------
+  # Customers can arrive with multiple SCD versions from the source. The
+  # enrichment must keep only the latest record per business key (by valid_from)
+  # and join the loyalty segment reference data. We mock two versions of the
+  # same customer and assert the newer one survives, enriched.
+  # ---------------------------------------------------------------------------
+  - name: enrich_customers_keeps_latest_version_and_joins_loyalty
+    model: int_customers__enriched
+    given:
+      - input: ref('stg_retail__customers')
+        rows:
+          # older version — should be dropped by the qualify row_number()
+          - {customer_id: 100, customer_business_key: 'CUST-1', customer_name: 'Old Name', loyalty_segment: 'GOLD', region: 'West', state: 'CA', city: 'SF', district: 'D1', postcode: '94016', units_purchased: 10, valid_from: '2023-01-01'}
+          # newer version — should win
+          - {customer_id: 101, customer_business_key: 'CUST-1', customer_name: 'New Name', loyalty_segment: 'GOLD', region: 'West', state: 'CA', city: 'SF', district: 'D1', postcode: '94016', units_purchased: 25, valid_from: '2024-06-01'}
+      - input: ref('stg_retail__loyalty_segments')
+        rows:
+          - {loyalty_segment_id: 'GOLD', loyalty_segment_description: 'Gold tier', unit_threshold: 20}
+    expect:
+      rows:
+        - {customer_id: 101, customer_business_key: 'CUST-1', customer_name: 'New Name', loyalty_segment: 'GOLD', loyalty_segment_description: 'Gold tier', unit_threshold: 20, region: 'West', state: 'CA', city: 'SF', district: 'D1', postcode: '94016', units_purchased: 25}
