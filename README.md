@@ -6,9 +6,10 @@ lab. Raw retail data is landed by Fivetran into Databricks Unity Catalog. One
 **consumer** domains build their own analytics on top using cross-project
 references — the dbt pattern for scaling analytics across teams on a lakehouse.
 
-> **Doing the lab?** Start with **[`LABS.md`](LABS.md)** — a step-by-step guide
-> from zero to a working Mesh, contracts, materialized view, unit tests, and
-> semantic layer.
+> **Doing the lab?** Start with **[`LABS.md`](LABS.md)** — a 6-module, SQL-only
+> hands-on lab (Fivetran ingest → producer → dbt's edge → production → Mesh →
+> semantic layer + dbt MCP + Genie), plus SA objection handling, a dbt-vs-DBX
+> cheat sheet, and a dbt MCP → Databricks setup appendix.
 
 ## The three projects
 
