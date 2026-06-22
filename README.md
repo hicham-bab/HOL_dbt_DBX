@@ -189,6 +189,18 @@ walk its structure.
    Use lowercase and underscores only — match exactly what you set as the
    Fivetran destination schema prefix in Module 1. Save the file.
 
+   > **👥 Sharing one dbt account?** Project **display names** must be unique in
+   > an account, so a roomful of people each creating `platform` will collide.
+   > Two options:
+   > - **Recommended for this lab:** one person creates the three projects
+   >   (`platform`, `marketing`, `finance`); everyone else opens them and develops
+   >   on their **own git branch**. No duplicate projects, and only one producer
+   >   needs deploying for cross-project refs.
+   > - **Per-person projects:** give the *display name* a personal suffix
+   >   (e.g. `platform — jdoe`) but **leave the internal project `name:` in
+   >   `dbt_project.yml` as `platform`** — cross-project `ref('platform', …)` and
+   >   `dependencies.yml` key off that internal name, not the display name.
+
    > **⚠️ Having trouble?** If your Fivetran sync isn't finished (or you hit
    > errors you can't resolve), set `raw_schema` to the shared instructor schema
    > `hicham_babahmed_retail` to use pre-loaded source data and continue the lab
@@ -462,6 +474,54 @@ Make the production job state-aware so it only builds what actually changed.
    dbt (`marketing/models/_marketing__exposures.yml`), so lineage reaches the
    dashboard.
 3. Recap the SA value: **consumption, coverage, speed, governance.**
+
+### 4.4 CI job — test every pull request before it merges
+A **CI job** runs automatically when someone opens a PR, builds only the
+*modified* models + their downstream, and reports pass/fail back on the PR. This
+is the engineering discipline (PR review + automated checks) that no-code
+pipelines don't have.
+
+1. Create a deployment environment for CI (dbt Labs recommends a dedicated
+   **CI/staging** environment; a production environment also works for the lab).
+2. **Orchestration → Jobs → Create job → Continuous integration job.**
+3. **Git trigger:** leave **Triggered by pull requests** on (optionally enable
+   **Run on draft pull request**).
+4. **Execution settings → Commands** (defaults shown — keep them):
+   ```bash
+   dbt build --select state:modified+        # build only changed models + downstream
+   dbt sl validate --select state:modified+  # validate metrics affected by the change
+   ```
+5. **Compare changes against an environment (Deferral):** set to **Production**.
+   State comparison (`state:modified+`) needs a deferred environment to diff
+   against — this is what limits the run to just your changes. Save.
+6. **See it work.** On a branch, reintroduce the **contract break** from Module
+   3.3 (`fct_sales.quantity` → `string`) and open a PR.
+
+   > ✅ **Expected:** the CI check goes red on the PR — the contract violation is
+   > caught in review, before it can reach `main` or any consumer. Fix and the
+   > check goes green. (Optional: with **Advanced CI** enabled, turn on **dbt
+   > compare** — our PK/uniqueness constraints let it produce a row-level diff.)
+
+> **⚠️ Monorepo note:** this repo holds three dbt projects, so a PR can trigger
+> CI for all connected projects. If that's noisy, give each project a separate
+> target branch (e.g. `main-platform`, `main-marketing`) in its environment's
+> custom-branch settings. (Docs: https://docs.getdbt.com/docs/deploy/ci-jobs.)
+
+### 4.5 Merge job — continuous deployment on merge
+A **merge job** runs when a PR merges, so production data updates automatically
+after review — continuous deployment.
+
+1. **Orchestration → Jobs → Create job → Merge job** (in your Production
+   environment).
+2. **Git trigger:** **Run on merge** is on by default — it fires whenever a PR
+   merges into the environment's base branch.
+3. **Commands:** keep the default `dbt build --select state:modified+` so only the
+   newly merged changes (and downstream) rebuild. Save.
+
+   > ✅ **Expected:** merging the fix from 4.4 triggers the merge job; only the
+   > changed models rebuild in production. (A merge job also refreshes the
+   > environment's `manifest.json`, keeping the CI job's deferral state fresh.)
+   > (Docs: https://docs.getdbt.com/docs/deploy/merge-jobs.)
 
 ---
 
