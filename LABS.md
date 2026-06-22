@@ -61,13 +61,19 @@ Same concepts you already know, different words:
 1. **Databricks**: a workspace with **Unity Catalog** and a **SQL warehouse**.
    Note your catalog name (the labs assume `main`). One warehouse is shared by
    the whole room.
-2. **A dbt platform account** (dbt Studio) with permission to create projects
-   and connect to Databricks.
+   - For the **materialized view** in Module 5, the workspace must have a
+     **serverless SQL warehouse** (Databricks materialized views and streaming
+     tables run on serverless + Unity Catalog).
+2. **A dbt platform account** (dbt Studio) with permission to create projects and
+   connect to Databricks. The **Fusion engine** is enabled on the environment.
+   - **dbt State** (Module 4) and **dbt Mesh** (Module 5) require **dbt
+     Enterprise / Enterprise+** on a Fusion environment. If your account is
+     Starter or single-project, run those modules presenter-led.
 3. This repository — `HOL_dbt_DBX` — accessible from your dbt platform account
    (GitHub/GitLab/Azure DevOps).
 
 > No dbt platform access? Modules 2, 3, and 6 run locally against `platform`
-> with the Fusion CLI — see [Appendix B](#appendix-b--local-cli-path). The Mesh
+> with the Fusion CLI — see [Appendix B](#appendix-b--local-cli-path-no-dbt-platform). The Mesh
 > module (5) requires the dbt platform.
 
 ---
@@ -99,23 +105,47 @@ Same concepts you already know, different words:
 **Goal:** stand up the `platform` producer project, connected to Databricks, and
 walk its structure.
 
-1. **Connect dbt platform to Databricks:** server hostname, SQL warehouse HTTP
-   path, catalog (your HOL catalog — e.g. `main`). Each attendee sets a personal
-   dev schema — e.g. `dbt_<initials>` — zero infra, instant isolated environment.
-   One SQL warehouse, shared by the room.
+1. **Connect dbt platform to Databricks.** In dbt Studio, create a Databricks
+   connection with these fields (from your lab credentials page):
+
+   | Field | Value | Example |
+   |-------|-------|---------|
+   | Server Hostname | your workspace host | `dbc-a2c61234-1234.cloud.databricks.com` |
+   | HTTP Path | your **SQL warehouse** HTTP path | `/sql/1.0/warehouses/1a23b4596cd7e8fg` |
+   | Catalog | your HOL Unity Catalog | `main` |
+   | Auth | personal access token | `dapi…` |
+
+   Then set your **development credentials**: a personal dev **schema** —
+   e.g. `dbt_<initials>` — so your builds are isolated. Zero infra, instant
+   environment; one SQL warehouse shared by the room.
 2. **Create the `platform` project** in dbt Studio: point it at the
    `HOL_dbt_DBX` repo with **project subdirectory = `platform`**. This is the
    *producer* — it owns the Fivetran source tables and publishes four governed
    models the other two projects build on. Set the raw-data vars to match your
    Fivetran destination schema from Module 1.
 
-   In `platform/dbt_project.yml`:
+   In `platform/dbt_project.yml`, find the `vars:` block and set:
    ```yaml
    vars:
-     raw_catalog: main
-     raw_schema: <yourfirstname>_<yourlastname>_retail
+     raw_catalog: main                                   # your Unity Catalog
+     raw_schema: <yourfirstname>_<yourlastname>_retail   # your Fivetran destination schema
    ```
-3. **Walk the project structure** in dbt Studio (file tree on the left):
+   Use lowercase and underscores only — match exactly what you set as the
+   Fivetran destination schema prefix in Module 1. Save the file.
+
+   > **⚠️ Having trouble?** If your Fivetran sync isn't finished (or you hit
+   > errors you can't resolve), set `raw_schema` to the shared instructor schema
+   > `hicham_babahmed_retail` to use pre-loaded source data and continue the lab
+   > without interruption.
+3. **Verify the raw data in Databricks** (while the connection is fresh). In the
+   Databricks **Catalog** explorer, open your catalog → your
+   `<yourfirstname>_<yourlastname>_retail` schema → **Tables** → `sales_orders`
+   → **Sample Data**. Scroll right to the `_fivetran_synced` column.
+
+   > ✅ **Expected:** rows of e-commerce orders loaded by Fivetran, each with a
+   > `_fivetran_synced` timestamp — the marker Fivetran adds to every table it
+   > manages.
+4. **Walk the project structure** in dbt Studio (file tree on the left):
    - `models/staging/retail/` — **Bronze → Silver views**: rename columns, cast
      types, drop soft-deleted rows. One staging model per Fivetran source table
      (`stg_retail__sales_orders.sql`, `stg_retail__customers.sql`,
@@ -131,10 +161,15 @@ walk its structure.
      loyalty-segment and address changes, declared in one config block.
    - `semantic_models/sem_retail.yml` — `total_revenue`, `total_units`,
      `avg_basket_value`, `revenue_per_customer`, defined once for everyone.
-4. **Run `dbt build`** in the IDE. Then switch to Databricks **Query History**:
+5. **Run `dbt build`** in the IDE. Then switch to Databricks **Query History**:
    every model compiled to SQL and pushed down to the SQL warehouse. This is the
    consumption argument live — no compute anywhere except Databricks.
-5. **Open `stg_retail__sales_orders.sql`** — it's a plain `SELECT`: renamed
+
+   > ✅ **Expected:** every model finishes with a green `OK` / `CREATE TABLE` /
+   > `CREATE VIEW` in the run logs, and the compiled SQL paths reference *your*
+   > dev schema. If you still see `hicham_babahmed_retail` everywhere, confirm
+   > you saved `dbt_project.yml` and re-run.
+6. **Open `stg_retail__sales_orders.sql`** — it's a plain `SELECT`: renamed
    columns, type casts, one `where not coalesce(_fivetran_deleted, false)`. dbt
    inferred the run order, wrote the `CREATE VIEW` DDL, and assigned the correct
    schema. You wrote only the transformation logic.
@@ -320,20 +355,57 @@ Hands-on:
 
 ---
 
-## Module 4 — Production
+## Module 4 — Production and dbt State
 
-1. Create a **production environment** + a **scheduled job** in dbt platform
-   (`dbt build` + source freshness). Show run history, logs, alerting. Point out
-   dbt State in the run details: unchanged models skipped or cloned — production
-   stays fresh at the lowest compute that still guarantees correctness.
-2. Mention the **dbt platform task type in Databricks Jobs** — orchestrate dbt
+### 4.1 Create a production job
+1. In the `platform` project, go to **Orchestration → Environments** and create a
+   **Production environment** (target `prod`, schema e.g. `analytics`) on the
+   **Fusion** engine.
+2. Go to **Orchestration → Jobs → Create job → Deploy job**. In **Execution
+   settings**, confirm the command is `dbt build`, add a second command
+   `dbt source freshness`, and check **Generate docs on run**. Save.
+3. Click **Run now** and watch the run logs, then explore run history and
+   alerting.
+
+   > ✅ **Expected:** all models build with green checkmarks; docs are generated.
+   > This run also publishes the producer's artifact other projects consume
+   > (Module 5).
+
+### 4.2 dbt State — never rebuild what hasn't changed
+Make the production job state-aware so it only builds what actually changed.
+
+1. Open the Prod job → **Settings → Edit**.
+2. Turn on **Enable Fusion cost optimization features**. This enables
+   **State-aware orchestration**; expand **More options** and also enable
+   **Efficient testing** (it's off by default) so tests on skipped models are
+   skipped too.
+3. Under **Advanced settings**, set **Compare changes against → Environment** and
+   select your **Production** environment. Save.
+4. **Run #1 (baseline).** Click **Run now**. With no prior state to compare
+   against, dbt builds everything and records the current state.
+
+   > ✅ **Expected:** all models execute (`CREATE`/`OK`). Note the run time.
+5. **Run #2 (nothing changed).** No new Fivetran data has loaded, so click **Run
+   now** again.
+
+   > ✅ **Expected:** every model is tagged **Reused/SKIP**, tests are skipped,
+   > and the job finishes in seconds with near-zero warehouse compute. Compare to
+   > Run #1.
+
+> **dbt vs native:** on a schedule (hourly/daily) you pay warehouse compute only
+> when data actually changed. For hundreds of models that's a large cut in both
+> cost and runtime — *wasted* consumption removed, not consumption.
+> (Docs: https://docs.getdbt.com/docs/deploy/state-aware-setup.)
+
+### 4.3 Orchestrate from Databricks + close the loop
+1. Mention the **dbt platform task type in Databricks Jobs** — orchestrate dbt
    platform jobs natively from Databricks workflows.
-3. Build a quick **AI/BI dashboard** on a mart — `mart_customer_loyalty` (revenue,
+2. Build a quick **AI/BI dashboard** on a mart — `mart_customer_loyalty` (revenue,
    basket value and units by loyalty segment and region) or `mart_b2b_orders`
-   (gross vs net booked amount by status). Tie back: it's registered as an
-   **exposure** in dbt (`marketing/models/_marketing__exposures.yml`), so lineage
-   reaches the dashboard.
-4. Recap the SA value: **consumption, coverage, speed, governance.**
+   (gross vs net booked amount by status). It's registered as an **exposure** in
+   dbt (`marketing/models/_marketing__exposures.yml`), so lineage reaches the
+   dashboard.
+3. Recap the SA value: **consumption, coverage, speed, governance.**
 
 ---
 
@@ -376,14 +448,30 @@ are single-project, run this presenter-led against the deployed projects.)*
    Create the `marketing` and `finance` projects in dbt Studio (subdirectories
    `marketing`, `finance`), then `dbt deps && dbt build`. No source duplication,
    no stale copies of someone else's tables.
-5. **Governance teeth (live demo).**
+
+   > ✅ **Expected:** the consumer build succeeds and resolves
+   > `ref('platform', …)`. If you see *"Failed to download publication artifact …
+   > 404"*, the producer hasn't run a production job yet — complete step 3 first.
+5. **Materialized view (finance) — the DLT contrast.**
+   `finance/models/fct_daily_revenue.sql` is an ordinary dbt model with
+   `materialized='materialized_view'`, built on `ref('platform', 'fct_sales')`.
+   `dbt build` issues `CREATE MATERIALIZED VIEW`; dbt manages the definition and
+   refresh and keeps it in the lineage graph. Verify in Databricks:
+   ```sql
+   DESCRIBE EXTENDED main.<finance_schema>.fct_daily_revenue;
+   ```
+   > **Requires a serverless SQL warehouse + Unity Catalog** (Databricks MVs run
+   > on serverless). **dbt vs native:** same model file you'd write for a table —
+   > only the `materialized` config changes — versioned and code-reviewed, vs a
+   > separate DLT pipeline with its own framework and lineage.
+6. **Governance teeth (live demo).**
    - Reference a **protected** producer model from a consumer — e.g.
      `{{ ref('platform', 'fct_support_tickets') }}` — and parse:
      `DbtReferenceError`. Only the four public models cross the boundary.
    - Make a contract-breaking column change on `fct_sales` (Module 3.3) → blocked
      in CI before it ships. In a notebook estate, nothing stops one team from
      querying another team's intermediate tables.
-6. **Cross-project lineage** in dbt Catalog/Explorer: Fivetran source → `platform`
+7. **Cross-project lineage** in dbt Catalog/Explorer: Fivetran source → `platform`
    gold → `marketing`/`finance` marts → dashboard exposure, across project
    boundaries.
 
@@ -409,13 +497,24 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
    The definition lives in version control, next to the models that feed it,
    tested and code-reviewed. No two dashboards can disagree on "revenue" when
    there's one definition.
-2. **Query through the Semantic Layer.** In dbt platform, ask for `total_revenue`
+2. **Enable the Semantic Layer** (one-time, per project). In **Account Settings →
+   [project] → Project Details**, click **Configure Semantic Layer**: enter the
+   Databricks connection credentials for the Semantic Layer (a least-privileged
+   user with `SELECT` + `CREATE TABLE` is recommended) and select the
+   **Production environment**. The environment needs one successful run — `dbt
+   build` from Module 4 satisfies this. Then **Generate a service token** and save
+   it for downstream tools.
+3. **Query through the Semantic Layer.** In dbt platform, ask for `total_revenue`
    grouped by `customer__region` by month — MetricFlow compiles the SQL and pushes
    it to the Databricks SQL warehouse. Add `loyalty_segment` as a dimension, or
    change the grain to week — never rewrite the SQL.
-3. **Connect the dbt MCP server to an AI agent.** Two options: any MCP client
-   (e.g. Claude), or — the crowd-pleaser for this audience — **Databricks AI
-   Playground via a Unity Catalog HTTP connection** (full setup in
+4. **Connect the dbt MCP server to an AI agent.** First ensure **AI features are
+   enabled** for the account (**Account Settings → enable AI**). The remote MCP
+   endpoint is `https://<your-dbt-host>/api/ai/v1/mcp/` and needs your
+   **production environment ID** (find it under Orchestration). Two options: any
+   MCP client (e.g. Claude — see [Appendix A](#part-d--alternative-connect-any-mcp-client-eg-claude)),
+   or — the crowd-pleaser for this audience — **Databricks AI Playground via a
+   Unity Catalog HTTP connection** (full setup in
    [Appendix A](#appendix-a--connect-the-dbt-mcp-server-to-databricks-uc-http-connection)).
    Live demo prompts:
    - *"What metrics do we have?"* → agent calls `list_metrics` — discovers
@@ -427,12 +526,12 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
      plausible answer, confidently wrong number.
    - *"Where does `avg_basket_value` come from?"* → lineage tools trace metric →
      `fct_sales` → `int_sales__order_items` → Fivetran `sales_orders` source.
-4. **Genie on the gold layer.** Create a Genie space on `mart_customer_loyalty` +
+5. **Genie on the gold layer.** Create a Genie space on `mart_customer_loyalty` +
    `dim_customers` (or `mart_b2b_orders` + `fct_orders`). Because dbt built clean,
    documented, well-named Gold tables — and pushed column descriptions into Unity
    Catalog via `persist_docs` — Genie's answers get dramatically better. dbt is
    the data-quality foundation that makes Genie shine.
-5. **The joint story for the SA:** Databricks provides the compute, governance, and
+6. **The joint story for the SA:** Databricks provides the compute, governance, and
    Genie UX; dbt provides the trusted transformations and metric definitions; MCP
    makes both consumable by any agent. AI on the lakehouse is only as good as the
    data layer beneath it — and that layer is built with dbt, running on Databricks.
@@ -603,6 +702,29 @@ permissions are enforced per person, not via a shared service account).
 3. Talking point: the agent lives in Databricks, the auth is Unity Catalog-governed,
    and the answer comes from dbt's metric definition — better together, end to end.
 
+## Part D — alternative: connect any MCP client (e.g. Claude)
+
+If you'd rather demo from a generic MCP client instead of Databricks, dbt hosts a
+**remote MCP server** over HTTP — no local install. First enable **AI features**
+(Account Settings → enable AI), then point your client at the endpoint.
+
+- **MCP URL:** `https://<your-dbt-host>/api/ai/v1/mcp/`
+- **Auth:** OAuth (browser sign-in on first connect) *or* token-based with
+  headers `Authorization: Token <PAT-or-service-token>` and
+  `x-dbt-prod-environment-id: <prod-env-id>`.
+
+Claude Code example (`.mcp.json` at the project root, OAuth):
+```json
+{
+  "mcpServers": {
+    "dbt": { "type": "http", "url": "https://YOUR_DBT_HOST_URL/api/ai/v1/mcp/" }
+  }
+}
+```
+Then ask *"What metrics are defined in my Semantic Layer?"* — the client calls
+`list_metrics`/`query_metrics` against the governed definitions.
+(Docs: https://docs.getdbt.com/docs/dbt-ai/mcp-quickstart-remote.)
+
 ## MCP troubleshooting
 - **Redirect/callback error during sign-in:** the Redirect URI in the dbt app
   integration must exactly match the workspace callback URL Databricks shows.
@@ -648,7 +770,7 @@ touching the warehouse.
 | `dbt debug` connection fails | Check warehouse hostname/HTTP path/token and that the warehouse is running. |
 | Contract error naming a column/type | A model's output doesn't match its contract. Fix the `cast(...)` in the model — this is the contract working (Module 3.3). |
 | Source `database`/`schema` not found | `raw_catalog`/`raw_schema` vars don't match your Fivetran destination. Update `platform/dbt_project.yml` or pass `--vars`. |
-| `DbtReferenceError` referencing a `platform` model | That model is `protected`. Only the four public models are consumable across projects (Module 5, step 5). |
+| `DbtReferenceError` referencing a `platform` model | That model is `protected`. Only the four public models are consumable across projects (Module 5, step 6). |
 | `ordered_products` explode errors | The nested payload's shape differs from the assumed `array<struct>`. See the TODO in `int_sales__order_items.sql` for the JSON-string variant. |
 
 # Appendix D — reset
