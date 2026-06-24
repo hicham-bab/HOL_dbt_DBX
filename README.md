@@ -121,7 +121,7 @@ Same concepts you already know, different words:
 | **model** | A `.sql` file with a `SELECT`. dbt wraps it in `CREATE TABLE/VIEW` and derives run order from `ref()`. | Notebook cell / DLT `@dlt.table` |
 | **`ref('model')`** | How models point at each other. dbt builds the DAG automatically — no task wiring. | Hard-coded table name + manual task dependency |
 | **`ref('project','model')`** | Cross-project reference — how a consumer points at a producer's *public* model. | Sharing a table by name across workflows (no contract) |
-| **materialization** | How a model is stored: `view`, `table`, `incremental`, `materialized_view`. | Delta table vs view vs DLT live table |
+| **materialization** | How a model is stored: `view`, `table`, `incremental`, `materialized_view`. | Delta table / view / DLT live table |
 | **data contract** | Enforced promise about column names, types, and keys. Fails the build if broken — before the table is touched. | DLT expectations govern *data*; contracts govern *schema shape* |
 | **test** | `not_null`, `unique`, `relationships`, `accepted_values` in YAML, or **unit tests** against mocked inputs. | DLT expectations / manual assertions |
 | **snapshot** | SCD Type 2 history from one config block — dbt manages `dbt_valid_from`/`dbt_valid_to`. | `AUTO CDC` or hand-written `MERGE` |
@@ -129,8 +129,8 @@ Same concepts you already know, different words:
 | **semantic layer** | Metrics (e.g. `total_revenue`) defined once, queried everywhere via MetricFlow. | Metric Views in Unity Catalog |
 | **exposure** | A documented downstream consumer (e.g. a BI dashboard) surfaced in the lineage graph. | No direct equivalent |
 
-> Throughout, **dbt vs native** callouts highlight what dbt adds over building
-> the same thing with notebooks or DLT alone.
+> Throughout, **What dbt adds** notes highlight what dbt brings on top of building
+> the same thing with notebooks or DLT.
 
 ---
 
@@ -171,7 +171,7 @@ Same concepts you already know, different words:
 3. Note your **catalog** and **schema** names — you'll plug them into the
    producer project in the next module.
 
-> **dbt vs native:** Fivetran lands raw data; dbt does every transformation from
+> **What dbt adds:** Fivetran lands raw data; dbt does every transformation from
 > here as SQL pushed down to your Databricks warehouse. For SaaS sources,
 > Fivetran's prebuilt **dbt packages** (HubSpot: 147 models, Salesforce,
 > NetSuite…) drop in dozens of tested models with one line in `packages.yml` —
@@ -284,7 +284,7 @@ walk its structure.
    inferred the run order, wrote the `CREATE VIEW` DDL, and assigned the correct
    schema. You wrote only the transformation logic.
 
-> **dbt vs native:** you declared *where* compute and data live once; every model
+> **What dbt adds:** you declared *where* compute and data live once; every model
 > inherits it — no per-notebook connection setup.
 
 ---
@@ -316,9 +316,9 @@ to
 unit_price + quantity as line_revenue   -- wrong on purpose
 ```
 Re-run `dbt test --select test_type:unit` → the explode test fails with
-expected-vs-actual `line_revenue`. Revert it.
+the expected and actual `line_revenue`. Revert it.
 
-> **dbt vs native:** unit tests catch logic regressions (a bad join, a wrong
+> **What dbt adds:** unit tests catch logic regressions (a bad join, a wrong
 > formula) on every change. DLT expectations validate the *data*; unit tests
 > validate the *transformation*.
 
@@ -335,7 +335,7 @@ cast(quantity as string) as quantity,
 Run `dbt build --select fct_sales` → the build **fails before writing the
 table**: the contract says `quantity` is `bigint`. Revert and re-run.
 
-> **dbt vs native:** the contract caught a breaking schema change *before* it
+> **What dbt adds:** the contract caught a breaking schema change *before* it
 > reached the table `marketing` and `finance` depend on — the guardrail that
 > makes cross-team consumption safe.
 
@@ -517,7 +517,7 @@ Make the production job state-aware so it only builds what actually changed.
    > and the job finishes in seconds with near-zero warehouse compute. Compare to
    > Run #1.
 
-> **dbt vs native:** on a schedule (hourly/daily) you pay warehouse compute only
+> **What dbt adds:** on a schedule (hourly/daily) you pay warehouse compute only
 > when data actually changed. For hundreds of models that's a large cut in both
 > cost and runtime — *wasted* consumption removed, not consumption.
 > (Docs: https://docs.getdbt.com/docs/deploy/state-aware-setup.)
@@ -527,7 +527,7 @@ Make the production job state-aware so it only builds what actually changed.
    platform jobs natively from Databricks workflows.
 2. Build a quick **AI/BI dashboard** on a mart — `mart_customer_loyalty` (revenue,
    basket value and units by loyalty segment and region) or `mart_b2b_orders`
-   (gross vs net booked amount by status). It's registered as an **exposure** in
+   (gross and net booked amount by status). It's registered as an **exposure** in
    dbt (`marketing/models/_marketing__exposures.yml`), so lineage reaches the
    dashboard.
 3. Step back and look at what one warehouse now covers end to end: transformation,
@@ -643,9 +643,9 @@ account — which also mirrors the real-world single-producer pattern.)*
    DESCRIBE EXTENDED main.<finance_schema>.fct_daily_revenue;
    ```
    > **Requires a serverless SQL warehouse + Unity Catalog** (Databricks MVs run
-   > on serverless). **dbt vs native:** same model file you'd write for a table —
-   > only the `materialized` config changes — versioned and code-reviewed, vs a
-   > separate DLT pipeline with its own framework and lineage.
+   > on serverless). **What dbt adds:** same model file you'd write for a table —
+   > only the `materialized` config changes — versioned and code-reviewed, instead
+   > of a separate DLT pipeline with its own framework and lineage.
 6. **Governance teeth (live demo).**
    - Reference a **protected** producer model from a consumer — e.g.
      `{{ ref('platform', 'fct_support_tickets') }}` — and parse:
@@ -745,7 +745,7 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
      Note there's no `ref()`/lineage tie from a hand-written Metric View back to the
      model, and no PR review of the metric change.
 
-   > **dbt vs native:** author the metric once in dbt (governed, portable), and —
+   > **What dbt adds:** author the metric once in dbt (governed, portable), and —
    > where a team works entirely inside Databricks — *also* expose it as a Metric
    > View. Better together, not either/or.
    > (Docs: https://docs.databricks.com/aws/en/metric-views/.)
@@ -813,7 +813,7 @@ A Databricks SA may ask: *"Lakeflow Designer is no-code, Genie is natural langua
 | They say | You say |
 | --- | --- |
 | "Designer is no-code" | "dbt is SQL-only — same skills bar, plus git, tests and CI for free. How do you code-review a canvas?" |
-| "dbt adds complexity" | "Four lines of YAML vs hand-written expectation code — which is the complex one?" |
+| "dbt adds complexity" | "Four lines of YAML, or hand-written expectation code — which is the complex one?" |
 | "We have Declarative Pipelines" | "Great for Spark teams. Your customer's SQL analysts already work in dbt — bring that consumption onto Databricks." |
 | "Genie means no modeling needed" | "Genie on raw bronze hallucinates; Genie on a dbt gold layer shines — Module 6 shows both." |
 | "Metric Views replace the semantic layer" | "Same definition either way — but dbt metrics are version-controlled, tested, and reach any agent via MCP. Author in dbt, expose as a Metric View where it helps." |
