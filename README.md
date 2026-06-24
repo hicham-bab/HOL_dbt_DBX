@@ -207,9 +207,10 @@ walk its structure.
    e.g. `dbt_<initials>` — so your builds are isolated. Zero infra, instant
    environment; one SQL warehouse shared by the room.
 2. **Fork the repo, then create the `platform` project.** First **fork
-   `HOL_dbt_DBX` to your own GitHub account** — work from *your* fork, not the
-   shared one. A personal fork gives you write access to push branches and open
-   pull requests in Modules 4–5 without needing access to anyone else's repo.
+   [`HOL_dbt_DBX`](https://github.com/hicham-bab/HOL_dbt_DBX) to your own GitHub
+   account** — work from *your* fork, not the shared one. A personal fork gives you
+   write access to push branches and open pull requests in Modules 4–5 without
+   needing access to anyone else's repo.
 
    > **🔑 Use a personal GitHub account.** Connecting your own fork (rather than an
    > org repo you can't push to) is what makes the branch/PR/CI steps later work.
