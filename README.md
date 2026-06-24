@@ -751,9 +751,11 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
    > (Docs: https://docs.databricks.com/aws/en/metric-views/.)
 5. **Connect the dbt MCP server to an AI agent.** First ensure **AI features are
    enabled** for the account (**Account Settings → enable AI**). The remote MCP
-   endpoint is `https://<your-dbt-host>/api/ai/v1/mcp/` and needs your
-   **production environment ID** (find it under Orchestration). Two options: any
-   MCP client (e.g. Claude — see [Appendix A](#part-d--alternative-connect-any-mcp-client-eg-claude)),
+   endpoint is `https://<your-dbt-host>/api/ai/v1/mcp/` (copy it from **Account
+   Settings → Access URLs**). With OAuth, sign-in is browser-based; with a token,
+   clients also pass your **production environment ID** (from Orchestration) in the
+   `x-dbt-prod-environment-id` header. Two options: any MCP client (e.g. Claude —
+   see [Appendix A](#part-d--alternative-connect-any-mcp-client-eg-claude)),
    or — the crowd-pleaser for this audience — **Databricks AI Playground via a
    Unity Catalog HTTP connection** (full setup in
    [Appendix A](#appendix-a--connect-the-dbt-mcp-server-to-databricks-uc-http-connection)).
@@ -833,17 +835,37 @@ agents) can call dbt MCP tools like `list_metrics` and `query_metrics` directly 
 with per-user OAuth, governed on both sides. This is the strongest version of the
 Module 6 demo: *Databricks' own agent stack consuming dbt's Semantic Layer.*
 
+**Before you start:**
+- **AI features must be enabled** on the dbt account (Account Settings → enable AI;
+  see [dbt AI features](https://docs.getdbt.com/docs/platform/enable-dbt-ai)).
+- The remote MCP server is available on all dbt plans; the underlying APIs each
+  tool uses vary by plan. Over the **remote** server you get **Semantic Layer, SQL,
+  Discovery, Administrative API, and Fusion** tools (no dbt CLI or codegen tools —
+  those are local-only).
+- The server speaks **Streamable HTTP**, which is the transport Databricks requires
+  for an MCP HTTP connection — so the two are compatible out of the box.
+- You'll need **admin** rights in both dbt (to register the OAuth app) and
+  Databricks (to create the Unity Catalog connection).
+
 ## Part A — dbt platform: register the OAuth app integration
-1. **Settings → Integrations → App integrations → Add integration**.
+Databricks configures this connection's OAuth manually (it doesn't self-register
+via dynamic registration), so create an App integration in dbt to get a client ID
+and the OAuth endpoints.
+
+1. **Account Settings → Integrations → App integrations → + Add integration**.
 2. **Integration name:** e.g. `dbx_mcp` (unique per account).
 3. **Redirect URI:** your Databricks workspace OAuth callback —
    `https://<workspace-host>/login/oauth/callback`
    (e.g. `https://dbc-xxxxxxxx.cloud.databricks.com/login/oauth/callback`).
+   It must **exactly** match the callback URL Databricks shows when you create the
+   connection in Part B.
 4. **Create integration** → copy the generated **client ID**. These integrations
-   use PKCE — **no client secret is issued** (leave the secret field empty on the
-   Databricks side).
-5. From the same Integrations page, copy the account's **MCP Endpoint URL**:
-   `https://<dbt-host>/api/ai/v1/mcp` (e.g. `https://da111.eu1.dbt.com/api/ai/v1/mcp`).
+   use **PKCE (RFC 7636)** — **no client secret is issued**, so leave the secret
+   field empty on the Databricks side.
+5. Copy the account's **MCP Endpoint URL** from **Account Settings → Access URLs →
+   MCP Endpoint URL**: `https://<dbt-host>/api/ai/v1/mcp/`
+   (e.g. `https://da111.eu1.dbt.com/api/ai/v1/mcp/`). The host and base path of this
+   URL feed Part B.
 
 ## Part B — Databricks: create the UC HTTP connection
 **Catalog → External data → Connections → Create connection**
@@ -870,15 +892,15 @@ Module 6 demo: *Databricks' own agent stack consuming dbt's Semantic Layer.*
 | OAuth scope | `offline_access account:read projects:query catalog:read projects:develop jobs:run` |
 
 *Scope tips: `offline_access` is required for refresh tokens. For a read-only demo
-agent, drop `projects:develop` and `jobs:run` — a nice governance talking point:
-you scope what the agent is allowed to do.*
+agent, keep `account:read projects:query catalog:read` and drop `projects:develop`
+and `jobs:run` — a clean way to show that you scope exactly what the agent can do.*
 
 **Step 3 — Connection details**
 
 | Field | Value |
 | --- | --- |
 | **Is mcp connection** | ☑️ **must be checked** — this is what makes it selectable as an MCP server for agents |
-| Base path | `/api/ai/v1/mcp` |
+| Base path | `/api/ai/v1/mcp/` (matches the MCP Endpoint URL from Part A) |
 | OAuth credential exchange method | Header and body (default) |
 | Token endpoint | `https://<dbt-host>/oauth/token` |
 
@@ -900,12 +922,17 @@ If you'd rather demo from a generic MCP client instead of Databricks, dbt hosts 
 **remote MCP server** over HTTP — no local install. First enable **AI features**
 (Account Settings → enable AI), then point your client at the endpoint.
 
-- **MCP URL:** `https://<your-dbt-host>/api/ai/v1/mcp/`
-- **Auth:** OAuth (browser sign-in on first connect) *or* token-based with
-  headers `Authorization: Token <PAT-or-service-token>` and
-  `x-dbt-prod-environment-id: <prod-env-id>`.
+- **MCP URL:** `https://<your-dbt-host>/api/ai/v1/mcp/` (copy it from **Account
+  Settings → Access URLs → MCP Endpoint URL**).
+- **Two auth options:**
+  - **OAuth** — browser sign-in on first connect, consent screen lists the scopes.
+    No tokens in the config. Most modern clients self-register via dynamic
+    registration (RFC 7591); the rest need a manual App integration (Part A).
+  - **Token-based** — a **PAT or service token** that has **Semantic Layer +
+    Developer** permissions, passed as headers. Works with any client and is the
+    path for shared/CI setups.
 
-Claude Code example (`.mcp.json` at the project root, OAuth):
+**OAuth** (Claude Code `.mcp.json` at the project root):
 ```json
 {
   "mcpServers": {
@@ -913,20 +940,51 @@ Claude Code example (`.mcp.json` at the project root, OAuth):
   }
 }
 ```
+
+**Token-based** (Claude Code `.mcp.json` — headers carry the token and env IDs):
+```json
+{
+  "mcpServers": {
+    "dbt": {
+      "type": "http",
+      "url": "https://YOUR_DBT_HOST_URL/api/ai/v1/mcp/",
+      "headers": {
+        "Authorization": "Token YOUR_DBT_ACCESS_TOKEN",
+        "x-dbt-prod-environment-id": "DBT_PROD_ENV_ID"
+      }
+    }
+  }
+}
+```
+- `Authorization` accepts `Token <token>` or `Bearer <token>`.
+- `x-dbt-prod-environment-id` is the **numeric** production environment ID (from
+  **Orchestration**) — use the number, not a URL.
+- The **`execute_sql`** and other Fusion tools additionally need
+  `x-dbt-dev-environment-id` (dev environment ID) and `x-dbt-user-id`.
+
 Then ask *"What metrics are defined in my Semantic Layer?"* — the client calls
 `list_metrics`/`query_metrics` against the governed definitions.
-(Docs: https://docs.getdbt.com/docs/dbt-ai/mcp-quickstart-remote.)
+(Docs: https://docs.getdbt.com/docs/dbt-ai/mcp-quickstart-remote and
+[Finding your IDs](https://docs.getdbt.com/docs/dbt-ai/mcp-find-ids).)
 
 ## MCP troubleshooting
 - **Redirect/callback error during sign-in:** the Redirect URI in the dbt app
   integration must exactly match the workspace callback URL Databricks shows.
-- **401 on tool calls:** check the scope string (space-separated, includes
+- **401 on OAuth tool calls:** check the scope string (space-separated, includes
   `offline_access`) and that the token endpoint is `/oauth/token` on the same dbt
   host as the authorize endpoint.
+- **401/403 on token-based calls:** the PAT or service token must have **Semantic
+  Layer + Developer** permissions, and `x-dbt-prod-environment-id` must be the
+  numeric environment ID (not a URL).
 - **Connection saved but not offered as an MCP tool:** the *Is mcp connection*
   checkbox wasn't ticked (unchecked by default — easy to miss when editing).
+- **No tools appear at all:** **AI features** must be enabled on the dbt account
+  (Account Settings → enable AI).
 - **Semantic Layer tools missing:** Semantic Layer must be enabled on the dbt
   account and the project must have metrics deployed in the environment.
+- **All tools suddenly blocked:** only `text_to_sql` consumes dbt Wizard credits,
+  but if the account runs **out of credits**, *every* MCP tool is blocked until
+  credits are topped up.
 
 ---
 
