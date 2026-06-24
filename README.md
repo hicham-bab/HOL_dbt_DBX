@@ -430,9 +430,9 @@ Enterprise+ plans.
   `fct_sales` semantic model. Add `customer__region` and `order_datetime` as
   available dimensions."*
 
-**Talking point:** every prompt above would require multiple back-and-forths with
-a generic coding assistant plus manual context-pasting. Wizard already knows the
-schema, contracts, and lineage — it gets to the right answer in one shot.
+Each of those prompts would take several back-and-forths with a generic coding
+assistant plus manual context-pasting. Because Wizard already knows the schema,
+contracts, and lineage, it tends to get there in one pass.
 
 **BYOK — the customer-choice story:** dbt Wizard runs on **whatever AI model the
 customer already uses**, with provider support split by surface:
@@ -446,16 +446,15 @@ No forced model; keys, cost, and data governance stay with the customer — a st
 answer for security-conscious enterprises
 (docs: https://docs.getdbt.com/docs/dbt-ai/wizard-byok).
 
-> **🧱 The Databricks-native angle (great for this room):** through the **Unity
-> Catalog AI Gateway**, the Wizard CLI can run on the *same* Claude or GPT models
-> the customer already serves from their own Databricks workspace — point it at a
-> serving endpoint (e.g. `databricks-claude-sonnet-4-6`) with a Databricks PAT, and
-> the agent's inference, governance, and cost all stay inside Databricks. This is
-> **CLI-only and in beta** today; the in-IDE Wizard used above runs on the
-> account-level OpenAI / Anthropic / Azure integration. Optional live demo in
-> [Appendix E](#appendix-e--showcase-dbt-wizard-on-a-databricks-served-model-optional).
-> (Not to be confused with **Genie** in Module 6, which is natural-language
-> querying that runs *on top of* the gold tables — a separate integration.)
+> That same flexibility means a customer can bring their own provider key, or
+> point the Wizard CLI at a model they already serve from their own Databricks
+> workspace through the Unity Catalog AI Gateway (e.g. a `databricks-claude-sonnet-4-6`
+> endpoint with a Databricks PAT), keeping inference inside Databricks. It's
+> CLI-only and in beta today; the in-IDE Wizard runs on the account-level OpenAI /
+> Anthropic / Azure integration.
+> [Appendix E](#appendix-e--showcase-dbt-wizard-on-a-databricks-served-model-optional)
+> has an optional walkthrough. (Genie in Module 6 is a separate integration —
+> natural-language querying over the gold tables.)
 
 ### 3.10 dbt State (Preview) — never rebuild what hasn't changed
 dbt State makes every `dbt build` state-aware: before running a node it checks
@@ -474,9 +473,9 @@ Hands-on:
 - In a fresh dev schema, build one mart — watch upstream tables get **cloned**
   from prod instead of rebuilt.
 
-> SA framing: dbt State removes *wasted* consumption, not consumption —
-> customers redeploy that budget into net-new workloads, and the efficient
-> platform is the one that grows. Works with dbt Core, the dbt platform, and the
+> dbt State removes *wasted* consumption, not consumption — that budget gets
+> redeployed into net-new workloads, and the efficient platform is the one that
+> grows. Works with dbt Core, the dbt platform, and the
 > Fusion engine (docs: https://docs.getdbt.com/docs/deploy/dbt-state-about).
 
 ---
@@ -531,7 +530,8 @@ Make the production job state-aware so it only builds what actually changed.
    (gross vs net booked amount by status). It's registered as an **exposure** in
    dbt (`marketing/models/_marketing__exposures.yml`), so lineage reaches the
    dashboard.
-3. Recap the SA value: **consumption, coverage, speed, governance.**
+3. Step back and look at what one warehouse now covers end to end: transformation,
+   orchestration, BI, and lineage — consumption, coverage, speed, and governance.
 
 ### 4.4 CI job — test every pull request before it merges
 A **CI job** runs automatically when someone opens a PR, builds only the
@@ -657,11 +657,10 @@ account — which also mirrors the real-world single-producer pattern.)*
    gold → `marketing`/`finance` marts → dashboard exposure, across project
    boundaries.
 
-> **Why the SA cares:** Mesh is how large EMEA enterprises scale dbt beyond one
-> team — more domains, more SQL warehouses, more governed consumption on
-> Databricks. Unity Catalog governs the data; dbt Mesh governs the
-> transformations and the interfaces between teams. (Docs:
-> https://docs.getdbt.com/docs/mesh/about-mesh.)
+> Mesh is how larger organizations scale dbt beyond a single team — more domains,
+> more SQL warehouses, more governed consumption on Databricks. Unity Catalog
+> governs the data; dbt Mesh governs the transformations and the interfaces between
+> teams. (Docs: https://docs.getdbt.com/docs/mesh/about-mesh.)
 
 ---
 
@@ -774,10 +773,10 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
    documented, well-named Gold tables — and pushed column descriptions into Unity
    Catalog via `persist_docs` — Genie's answers get dramatically better. dbt is
    the data-quality foundation that makes Genie shine.
-7. **The joint story for the SA:** Databricks provides the compute, governance, and
-   Genie UX; dbt provides the trusted transformations and metric definitions; MCP
-   makes both consumable by any agent. AI on the lakehouse is only as good as the
-   data layer beneath it — and that layer is built with dbt, running on Databricks.
+7. **Putting it together:** Databricks provides the compute, governance, and Genie
+   UX; dbt provides the trusted transformations and metric definitions; MCP makes
+   both consumable by any agent. AI on the lakehouse is only as good as the data
+   layer beneath it — and that layer is built with dbt, running on Databricks.
 
 ---
 
@@ -892,8 +891,8 @@ permissions are enforced per person, not via a shared service account).
 2. Demo prompts: *"What metrics are available?"* → `list_metrics`; *"Total revenue
    by customer region, last month"* → `query_metrics` — the governed number,
    computed through MetricFlow on the SQL warehouse.
-3. Talking point: the agent lives in Databricks, the auth is Unity Catalog-governed,
-   and the answer comes from dbt's metric definition — better together, end to end.
+3. The agent lives in Databricks, the auth is Unity Catalog-governed, and the
+   answer comes from dbt's metric definition — governed on both sides.
 
 ## Part D — alternative: connect any MCP client (e.g. Claude)
 
@@ -1015,7 +1014,7 @@ cd platform && dbt build
    it."* The answer is generated by a model served from **your** Databricks
    workspace, governed by Unity Catalog.
 
-> **The SA line:** the customer's transformation agent *and* its LLM both run on
-> Databricks they already govern and pay for — dbt brings the project context,
-> Databricks serves the model. Better together, end to end.
+> In this setup the transformation agent and the LLM both run on Databricks the
+> customer already governs and pays for — dbt brings the project context,
+> Databricks serves the model.
 > (Docs: https://docs.getdbt.com/docs/dbt-ai/wizard-byok.)
