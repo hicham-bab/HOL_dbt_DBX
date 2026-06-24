@@ -454,7 +454,7 @@ answer for security-conscious enterprises
 > account-level OpenAI / Anthropic / Azure integration. Optional live demo in
 > [Appendix E](#appendix-e--showcase-dbt-wizard-on-a-databricks-served-model-optional).
 > (Not to be confused with **Genie** in Module 6, which is natural-language
-> querying *on top of* the gold tables — a different, complementary integration.)
+> querying that runs *on top of* the gold tables — a separate integration.)
 
 ### 3.10 dbt State (Preview) — never rebuild what hasn't changed
 dbt State makes every `dbt build` state-aware: before running a node it checks
@@ -679,17 +679,16 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
    tested and code-reviewed. No two dashboards can disagree on "revenue" when
    there's one definition.
 
-   > **🤝 dbt Semantic Layer vs Databricks Metric Views — where we compete, where
-   > we complement.** Both let you define a metric like `total_revenue` once.
-   > *Complement:* a **Databricks Metric View** is warehouse-local and plugs
-   > straight into Databricks-native consumption — AI/BI dashboards, Genie, and
-   > Unity Catalog governance — so it's a great fit when everything stays inside
-   > Databricks. *Compete:* the **dbt Semantic Layer** defines the metric in
-   > version-controlled YAML next to the models, ships with tests and CI, carries
-   > the same definition across *any* BI tool or agent through MCP, and isn't tied
-   > to one warehouse. For most customers the answer is "both": author once in dbt,
-   > and where a team lives natively in Databricks, expose it as a Metric View too.
-   > You'll see both side by side in the optional step below.
+   > **🤝 dbt Semantic Layer and Databricks Metric Views.** Both let you define a
+   > metric like `total_revenue` once. A **Databricks Metric View** is
+   > warehouse-local and plugs straight into Databricks-native consumption — AI/BI
+   > dashboards, Genie, and Unity Catalog governance — so it's a great fit when
+   > everything stays inside Databricks. The **dbt Semantic Layer** defines the
+   > metric in version-controlled YAML next to the models, ships with tests and CI,
+   > and carries the same definition across *any* BI tool or agent through MCP,
+   > without being tied to one warehouse. For most customers the answer is "both":
+   > author once in dbt, and where a team lives natively in Databricks, expose it
+   > as a Metric View too. You'll see both side by side in the optional step below.
 2. **Enable the Semantic Layer** (one-time, per project). In **Account Settings →
    [project] → Project Details**, click **Configure Semantic Layer**: enter the
    Databricks connection credentials for the Semantic Layer (a least-privileged
@@ -702,7 +701,7 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
    it to the Databricks SQL warehouse. Add `loyalty_segment` as a dimension, or
    change the grain to week — never rewrite the SQL.
 4. **(Optional, hands-on) Build the same metric as a Databricks Metric View — and
-   contrast.** To make the compete/complement story concrete, define `total_revenue`
+   contrast.** To make the side-by-side concrete, define `total_revenue`
    natively in Unity Catalog on the *same* dbt-built gold table. In a Databricks
    SQL editor:
    ```sql
@@ -739,13 +738,12 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
    - **Same number, two homes.** The Metric View computes the identical
      `total_revenue` — because it sits on the clean, tested `fct_sales` dbt built.
      The metric is only as trustworthy as the table under it.
-   - **Complement:** the Metric View is the natural fit for **Databricks-native**
-     consumption — Genie and AI/BI read it directly, governed by Unity Catalog.
-   - **Compete / where dbt wins:** the dbt definition is **version-controlled,
-     tested in CI, lives next to the model, and reaches any BI tool or agent via
-     MCP** — not bound to one warehouse. Note there's no `ref()`/lineage tie from a
-     hand-written Metric View back to the model, and no PR review of the metric
-     change.
+   - **The Metric View** is the natural fit for **Databricks-native** consumption —
+     Genie and AI/BI read it directly, governed by Unity Catalog.
+   - **The dbt definition** is **version-controlled, tested in CI, lives next to the
+     model, and reaches any BI tool or agent via MCP** — not bound to one warehouse.
+     Note there's no `ref()`/lineage tie from a hand-written Metric View back to the
+     model, and no PR review of the metric change.
 
    > **dbt vs native:** author the metric once in dbt (governed, portable), and —
    > where a team works entirely inside Databricks — *also* expose it as a Metric
@@ -782,14 +780,6 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
 
 ---
 
-## Wrap-up — discussion
-
-When do you position Lakeflow vs Fivetran + dbt? *(Honest answer: Lakeflow for
-covered sources and Spark-centric teams; Fivetran + dbt for long-tail sources and
-SQL-first analytics teams — often both in one account.)*
-
----
-
 # Positioning: dbt + Databricks, better together
 
 This lab tells a **"better together"** story — not "dbt instead of Databricks."
@@ -813,32 +803,12 @@ A few framing points for this audience:
   foundation is what makes the AI story land (Module 6).
 - **Databricks invests in dbt.** The dbt-databricks adapter, the native dbt
   platform task in Lakeflow Jobs, and joint Fivetran + dbt reference architectures
-  are all maintained by Databricks. This is a partnership pattern, not a
-  competition.
+  are all maintained by Databricks. This is a partnership pattern.
 
-## Where we complement vs where we overlap
+## Reframes for common questions
 
-Most of the stack is complementary. A few capabilities overlap with
-Databricks-native tooling — be clear and honest about which is which:
-
-| Capability | dbt on Databricks | Databricks-native | Complement or overlap? |
-| --- | --- | --- | --- |
-| Source connectors (via Fivetran) | 700+ | ~10 managed SaaS connectors in Lakeflow Connect | **Complement** — dbt transforms what Fivetran/Lakeflow land |
-| Data quality tests | Declarative YAML, ~4 lines | DQX / expectations (code) | **Overlap** — dbt is less code, convention-driven |
-| SCD2 history | Snapshots: one config block | AUTO CDC / hand-written MERGE | **Overlap** — dbt is declarative |
-| Incremental load | `is_incremental()`, one config | MERGE logic + checkpoints | **Overlap** |
-| Prebuilt transform packages | Fivetran dbt packages, dbt_utils, dbt package hub | None comparable | **dbt-only** |
-| Docs + column-level lineage | Auto-generated, ties to exposures | Unity Catalog lineage (no docs-as-code) | **Complement** — UC governs data, dbt documents transforms |
-| State-aware builds | dbt State: skip/clone/auto-defer, semantic diff | Rebuild, or hand-rolled change detection | **dbt-only** |
-| Multi-team ownership | dbt Mesh: public models, contracts, cross-project ref | Separate workspaces, no contract semantics | **dbt-only** |
-| Metrics / semantic layer | dbt Semantic Layer: versioned, tested, portable via MCP | Unity Catalog Metric Views: warehouse-local, native BI/Genie | **Overlap** — author in dbt, expose natively where useful (Module 6.4) |
-| AI consumption | dbt MCP exposes metrics + lineage to any agent | Genie / AI/BI on UC tables | **Complement** — dbt builds the trusted data Genie reads |
-| Audience | SQL-fluent analytics engineers | Spark / Python data engineers | **Complement** — same lakehouse, different personas |
-
-## If the conversation turns competitive
-
-The most common challenge from a Databricks SA is: *"Lakeflow Designer is no-code,
-Genie is natural language — why add dbt?"* Reframes, kept friendly:
+A Databricks SA may ask: *"Lakeflow Designer is no-code, Genie is natural language
+— why add dbt?"* Friendly reframes:
 
 | They say | You say |
 | --- | --- |
@@ -846,12 +816,12 @@ Genie is natural language — why add dbt?"* Reframes, kept friendly:
 | "dbt adds complexity" | "Four lines of YAML vs hand-written expectation code — which is the complex one?" |
 | "We have Declarative Pipelines" | "Great for Spark teams. Your customer's SQL analysts already work in dbt — bring that consumption onto Databricks." |
 | "Genie means no modeling needed" | "Genie on raw bronze hallucinates; Genie on a dbt gold layer shines — Module 6 shows both." |
-| "Metric Views replace the semantic layer" | "They overlap on the definition — but dbt metrics are version-controlled, tested, and reach any agent via MCP. Author in dbt, expose as a Metric View where it helps." |
+| "Metric Views replace the semantic layer" | "Same definition either way — but dbt metrics are version-controlled, tested, and reach any agent via MCP. Author in dbt, expose as a Metric View where it helps." |
 | "This is just extra cost" | "Every dbt run is SQL-warehouse consumption — dbt grows the workload, it doesn't tax it. dbt State even removes the *wasted* compute." |
 
 *Tone for the room: agree that simplicity matters, then redefine it — "simple"
 should mean simple to trust, maintain, and hand over, not just simple to click
-together in a demo. The goal is "better together," not winning a debate.*
+together in a demo. The goal is "better together."*
 
 ---
 
