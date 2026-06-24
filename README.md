@@ -780,14 +780,6 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
 
 ---
 
-## Wrap-up — discussion
-
-When do you position Lakeflow vs Fivetran + dbt? *(Honest answer: Lakeflow for
-covered sources and Spark-centric teams; Fivetran + dbt for long-tail sources and
-SQL-first analytics teams — often both in one account.)*
-
----
-
 # Positioning: dbt + Databricks, better together
 
 This lab tells a **"better together"** story — not "dbt instead of Databricks."
