@@ -805,25 +805,6 @@ A few framing points for this audience:
   platform task in Lakeflow Jobs, and joint Fivetran + dbt reference architectures
   are all maintained by Databricks. This is a partnership pattern.
 
-## How dbt and Databricks-native tooling fit together
-
-dbt and Databricks run on the same lakehouse. The table below shows where the
-dbt workflow lines up with Databricks-native tooling and what dbt adds on top:
-
-| Capability | dbt on Databricks | Databricks-native | What dbt brings |
-| --- | --- | --- | --- |
-| Source connectors (via Fivetran) | 700+ | ~10 managed SaaS connectors in Lakeflow Connect | transforms whatever Fivetran/Lakeflow lands |
-| Data quality tests | Declarative YAML, ~4 lines | DQX / expectations (code) | the same tests in a few lines, convention over code |
-| SCD2 history | Snapshots: one config block | AUTO CDC / hand-written MERGE | history from one declarative config block |
-| Incremental load | `is_incremental()`, one config | MERGE logic + checkpoints | declarative — no manual MERGE or checkpoints |
-| Prebuilt transform packages | Fivetran dbt packages, dbt_utils, dbt package hub | None comparable | dozens of tested models via `dbt deps` |
-| Docs + column-level lineage | Auto-generated, ties to exposures | Unity Catalog lineage (no docs-as-code) | docs-as-code layered on top of UC lineage |
-| State-aware builds | dbt State: skip/clone/auto-defer, semantic diff | Rebuild, or hand-rolled change detection | skips rebuilding what hasn't changed |
-| Multi-team ownership | dbt Mesh: public models, contracts, cross-project ref | Separate workspaces, no contract semantics | contracts + cross-project refs across domains |
-| Metrics / semantic layer | dbt Semantic Layer: versioned, tested, portable via MCP | Unity Catalog Metric Views: warehouse-local, native BI/Genie | one versioned, tested definition for any agent (Module 6.4) |
-| AI consumption | dbt MCP exposes metrics + lineage to any agent | Genie / AI/BI on UC tables | the trusted, documented data Genie and agents read |
-| Audience | SQL-fluent analytics engineers | Spark / Python data engineers | brings SQL analysts onto the same lakehouse |
-
 ## Reframes for common questions
 
 A Databricks SA may ask: *"Lakeflow Designer is no-code, Genie is natural language
