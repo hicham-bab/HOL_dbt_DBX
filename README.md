@@ -8,7 +8,8 @@ references — the dbt pattern for scaling analytics across teams on a lakehouse
 
 > **The full step-by-step guide is below** (Modules 1–6). It's SQL-only and
 > written to take you from raw Fivetran tables to a governed Mesh, a semantic
-> layer, and governed AI consumption.
+> layer, and governed AI consumption — the trusted, well-documented data
+> foundation that makes Databricks Genie and AI agents reliable on the lakehouse.
 
 ## Contents
 
@@ -16,6 +17,7 @@ references — the dbt pattern for scaling analytics across teams on a lakehouse
 - [Public interface (the Mesh contract)](#public-interface-the-mesh-contract)
 - [Topology](#topology)
 - [What this lab demonstrates](#what-this-lab-demonstrates-dbt-alongside-databricks-native-tooling)
+- [Why the Fusion engine](#why-the-fusion-engine)
 - **Step-by-step lab:**
   - [dbt vocabulary for Databricks people](#dbt-vocabulary-for-databricks-people)
   - [Prerequisites](#prerequisites)
@@ -23,11 +25,10 @@ references — the dbt pattern for scaling analytics across teams on a lakehouse
   - [Module 2 — Connect dbt platform and explore the producer project](#module-2--connect-dbt-platform-and-explore-the-producer-project)
   - [Module 3 — What dbt adds that notebooks don't](#module-3--what-dbt-adds-that-notebooks-dont)
   - [Module 4 — Production and dbt State](#module-4--production-and-dbt-state)
-  - [Module 5 — dbt Mesh (hands-on)](#module-5--dbt-mesh-one-platform-governed-cross-team-interfaces-hands-on)
+  - [Module 5 — dbt Mesh (Optional, hands-on)](#module-5--dbt-mesh-optional-one-platform-governed-cross-team-interfaces-hands-on)
   - [Module 6 — Semantic Layer + dbt MCP + Genie](#module-6--semantic-layer--dbt-mcp--genie-governed-ai-consumption)
-- [Objection handling](#objection-handling-our-solution-isnt-technical-dbt-adds-engineering)
-- [dbt vs DBX-native cheat sheet](#dbt-vs-dbx-native-cheat-sheet)
-- [Appendices: MCP setup, local CLI, troubleshooting, reset](#appendix-a--connect-the-dbt-mcp-server-to-databricks-uc-http-connection)
+- [Positioning: dbt + Databricks, better together](#positioning-dbt--databricks-better-together)
+- [Appendices: MCP setup, local CLI, troubleshooting, reset, Wizard on Databricks](#appendix-a--connect-the-dbt-mcp-server-to-databricks-uc-http-connection)
 
 ## The three projects
 
@@ -90,6 +91,27 @@ contracts** and **Unity Catalog primary/foreign keys**. Everything else is
 
 ---
 
+## Why the Fusion engine
+
+This lab runs on the **Fusion engine** — dbt's Rust-based engine — against the
+`dbt-databricks` adapter. Beyond raw speed, Fusion adds capabilities a Databricks
+SQL team notices right away:
+
+- **Catches invalid SQL before it runs.** Fusion understands SQL dialects natively
+  (static analysis and type-checking), so a bad column or type is flagged in the
+  editor — not after a warehouse round-trip.
+- **Column-level lineage** across the whole project — the lineage you generate in
+  Module 3.7 is computed by the engine, not bolted on afterward.
+- **State-aware builds (dbt State).** Skip / clone / auto-defer unchanged models,
+  with a *semantic* SQL diff and source-freshness awareness (Modules 3.10 & 4.2).
+- **Auto-optimized parallelism on Databricks.** Fusion tunes concurrency for the
+  warehouse instead of relying on a fixed `threads` value.
+
+Net for the SA: faster feedback loops and less wasted warehouse compute — on the
+same Databricks SQL warehouse the customer already runs.
+
+---
+
 ## dbt vocabulary for Databricks people
 
 Same concepts you already know, different words:
@@ -125,8 +147,9 @@ Same concepts you already know, different words:
    - **dbt State** (Module 4) and **dbt Mesh** (Module 5) require **dbt
      Enterprise / Enterprise+** on a Fusion environment. If your account is
      Starter or single-project, run those modules presenter-led.
-3. This repository — `HOL_dbt_DBX` — accessible from your dbt platform account
-   (GitHub/GitLab/Azure DevOps).
+
+> You'll fork and connect the `HOL_dbt_DBX` repo in **Module 2** — no repo setup
+> is needed before then.
 
 > No dbt platform access? Modules 2, 3, and 6 run locally against `platform`
 > with the Fusion CLI — see [Appendix B](#appendix-b--local-cli-path-no-dbt-platform). The Mesh
@@ -168,17 +191,35 @@ walk its structure.
    |-------|-------|---------|
    | Server Hostname | your workspace host | `dbc-a2c61234-1234.cloud.databricks.com` |
    | HTTP Path | your **SQL warehouse** HTTP path | `/sql/1.0/warehouses/1a23b4596cd7e8fg` |
-   | Catalog | your HOL Unity Catalog | `main` |
    | Auth | personal access token | `dapi…` |
+
+   > **⚠️ Set the catalog — don't skip it.** Under the connection's **Optional
+   > settings**, set **Catalog** to your HOL Unity Catalog (e.g. `main`). If you
+   > leave it blank, Databricks falls back to the legacy **`hive_metastore`**
+   > catalog and your builds won't find the Unity Catalog source data.
+
+   > **🧩 Databricks SA tip — pasting the PAT.** If the **Auth** field won't accept
+   > a pasted token, a password-manager or clipboard browser extension is likely
+   > intercepting the paste. Temporarily disable the extension (or paste in an
+   > incognito window) to enter the `dapi…` token, then re-enable it.
 
    Then set your **development credentials**: a personal dev **schema** —
    e.g. `dbt_<initials>` — so your builds are isolated. Zero infra, instant
    environment; one SQL warehouse shared by the room.
-2. **Create the `platform` project** in dbt Studio: point it at the
-   `HOL_dbt_DBX` repo with **project subdirectory = `platform`**. This is the
-   *producer* — it owns the Fivetran source tables and publishes four governed
-   models the other two projects build on. Set the raw-data vars to match your
-   Fivetran destination schema from Module 1.
+2. **Fork the repo, then create the `platform` project.** First **fork
+   `HOL_dbt_DBX` to your own GitHub account** — work from *your* fork, not the
+   shared one. A personal fork gives you write access to push branches and open
+   pull requests in Modules 4–5 without needing access to anyone else's repo.
+
+   > **🔑 Use a personal GitHub account.** Connecting your own fork (rather than an
+   > org repo you can't push to) is what makes the branch/PR/CI steps later work.
+   > If you don't have a fork yet, create one now — it takes a few seconds.
+
+   In dbt Studio, create the project pointing at **your fork** of `HOL_dbt_DBX`
+   with **project subdirectory = `platform`**, and develop on your own branch off
+   `main`. This is the *producer* — it owns the Fivetran source tables and
+   publishes four governed models the other two projects build on. Set the
+   raw-data vars to match your Fivetran destination schema from Module 1.
 
    In `platform/dbt_project.yml`, find the `vars:` block and set:
    ```yaml
@@ -230,8 +271,8 @@ walk its structure.
    - `semantic_models/sem_retail.yml` — `total_revenue`, `total_units`,
      `avg_basket_value`, `revenue_per_customer`, defined once for everyone.
 5. **Run `dbt build`** in the IDE. Then switch to Databricks **Query History**:
-   every model compiled to SQL and pushed down to the SQL warehouse. This is the
-   consumption argument live — no compute anywhere except Databricks.
+   every model compiled to SQL and pushed down to the SQL warehouse — no compute
+   anywhere except Databricks.
 
    > ✅ **Expected:** every model finishes with a green `OK` / `CREATE TABLE` /
    > `CREATE VIEW` in the run logs, and the compiled SQL paths reference *your*
@@ -392,12 +433,28 @@ Enterprise+ plans.
 a generic coding assistant plus manual context-pasting. Wizard already knows the
 schema, contracts, and lineage — it gets to the right answer in one shot.
 
-**BYOK — the customer-choice story:** dbt Wizard connects to **whatever AI model
-the customer already uses** — OpenAI (managed or BYOK), Anthropic, Azure AI
-Foundry/Azure OpenAI, and in the CLI also AWS Bedrock and Databricks Genie. No
-forced model; keys and data governance stay with the customer — a strong answer
-for security-conscious EMEA enterprises
-(docs: https://docs.getdbt.com/docs/dbt-ai/wizard-ide).
+**BYOK — the customer-choice story:** dbt Wizard runs on **whatever AI model the
+customer already uses**, with provider support split by surface:
+- **In the dbt platform** (Studio IDE + Wizard home tab): dbt Labs-managed OpenAI
+  or Anthropic by default, or **bring your own** OpenAI, Anthropic, or Azure AI
+  Foundry key (Enterprise / Enterprise+).
+- **In the Wizard CLI**, additionally: AWS Bedrock, Google Gemini, Snowflake Cortex
+  (preview), and **Databricks via the Unity Catalog AI Gateway** (beta).
+
+No forced model; keys, cost, and data governance stay with the customer — a strong
+answer for security-conscious enterprises
+(docs: https://docs.getdbt.com/docs/dbt-ai/wizard-byok).
+
+> **🧱 The Databricks-native angle (great for this room):** through the **Unity
+> Catalog AI Gateway**, the Wizard CLI can run on the *same* Claude or GPT models
+> the customer already serves from their own Databricks workspace — point it at a
+> serving endpoint (e.g. `databricks-claude-sonnet-4-6`) with a Databricks PAT, and
+> the agent's inference, governance, and cost all stay inside Databricks. This is
+> **CLI-only and in beta** today; the in-IDE Wizard used above runs on the
+> account-level OpenAI / Anthropic / Azure integration. Optional live demo in
+> [Appendix E](#appendix-e--showcase-dbt-wizard-on-a-databricks-served-model-optional).
+> (Not to be confused with **Genie** in Module 6, which is natural-language
+> querying *on top of* the gold tables — a different, complementary integration.)
 
 ### 3.10 dbt State (Preview) — never rebuild what hasn't changed
 dbt State makes every `dbt build` state-aware: before running a node it checks
@@ -416,7 +473,7 @@ Hands-on:
 - In a fresh dev schema, build one mart — watch upstream tables get **cloned**
   from prod instead of rebuilt.
 
-> SA framing, honest: dbt State removes *wasted* consumption, not consumption —
+> SA framing: dbt State removes *wasted* consumption, not consumption —
 > customers redeploy that budget into net-new workloads, and the efficient
 > platform is the one that grows. Works with dbt Core, the dbt platform, and the
 > Fusion engine (docs: https://docs.getdbt.com/docs/deploy/dbt-state-about).
@@ -525,12 +582,20 @@ after review — continuous deployment.
 
 ---
 
-## Module 5 — dbt Mesh: one platform, governed cross-team interfaces (hands-on)
+## Module 5 — dbt Mesh (Optional): one platform, governed cross-team interfaces (hands-on)
+
+> **Optional module.** Mesh is the scaling story for multi-team customers, but it
+> requires **dbt Enterprise** and a deployed producer. If you're short on time, or
+> your account is Starter / single-project, **skip this module** or run it
+> presenter-led against the pre-deployed projects — Modules 1–4 and 6 stand on
+> their own. Come back to it when the multi-domain conversation comes up.
 
 The three projects aren't just folders — they're independent dbt projects, and
 that's the dbt Mesh story: domain teams owning their own projects while sharing
-governed, contracted interfaces. *(Requires dbt Enterprise. If attendee accounts
-are single-project, run this presenter-led against the deployed projects.)*
+governed, contracted interfaces. *(Requires dbt Enterprise. Because cross-project
+`ref('platform', …)` resolves by the producer's internal project `name:`, run this
+presenter-led against one designated, deployed producer if a room shares a single
+account — which also mirrors the real-world single-producer pattern.)*
 
 1. **The setup.** `platform` is the upstream producer domain; `marketing` and
    `finance` are downstream consumer domains that depend on it.
@@ -613,6 +678,18 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
    The definition lives in version control, next to the models that feed it,
    tested and code-reviewed. No two dashboards can disagree on "revenue" when
    there's one definition.
+
+   > **🤝 dbt Semantic Layer vs Databricks Metric Views — where we compete, where
+   > we complement.** Both let you define a metric like `total_revenue` once.
+   > *Complement:* a **Databricks Metric View** is warehouse-local and plugs
+   > straight into Databricks-native consumption — AI/BI dashboards, Genie, and
+   > Unity Catalog governance — so it's a great fit when everything stays inside
+   > Databricks. *Compete:* the **dbt Semantic Layer** defines the metric in
+   > version-controlled YAML next to the models, ships with tests and CI, carries
+   > the same definition across *any* BI tool or agent through MCP, and isn't tied
+   > to one warehouse. For most customers the answer is "both": author once in dbt,
+   > and where a team lives natively in Databricks, expose it as a Metric View too.
+   > You'll see both side by side in the optional step below.
 2. **Enable the Semantic Layer** (one-time, per project). In **Account Settings →
    [project] → Project Details**, click **Configure Semantic Layer**: enter the
    Databricks connection credentials for the Semantic Layer (a least-privileged
@@ -624,7 +701,57 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
    grouped by `customer__region` by month — MetricFlow compiles the SQL and pushes
    it to the Databricks SQL warehouse. Add `loyalty_segment` as a dimension, or
    change the grain to week — never rewrite the SQL.
-4. **Connect the dbt MCP server to an AI agent.** First ensure **AI features are
+4. **(Optional, hands-on) Build the same metric as a Databricks Metric View — and
+   contrast.** To make the compete/complement story concrete, define `total_revenue`
+   natively in Unity Catalog on the *same* dbt-built gold table. In a Databricks
+   SQL editor:
+   ```sql
+   CREATE VIEW <catalog>.<your_schema>.mv_retail_revenue
+   WITH METRICS
+   LANGUAGE YAML
+   AS $$
+   version: 0.1
+   source: <catalog>.<your_schema>.fct_sales
+   dimensions:
+     - name: Order Date
+       expr: order_datetime
+     - name: Product
+       expr: product_name
+   measures:
+     - name: Total Revenue
+       expr: SUM(line_revenue)
+     - name: Total Units
+       expr: SUM(quantity)
+     - name: Avg Basket Value
+       expr: SUM(line_revenue) / COUNT(DISTINCT sales_order_id)
+   $$;
+   ```
+   (`fct_sales` is at order-line grain, so customer region lives on `dim_customers`
+   — keep this Metric View on columns the table actually has, or add a join. The
+   dbt semantic layer already exposes `customer__region` for you.) Then query it —
+   measures and dimensions are referenced by their names:
+   ```sql
+   SELECT `Product`, `Total Revenue`
+   FROM <catalog>.<your_schema>.mv_retail_revenue
+   GROUP BY ALL;
+   ```
+   …or point a Genie space / AI/BI dashboard at it. Side-by-side talking points:
+   - **Same number, two homes.** The Metric View computes the identical
+     `total_revenue` — because it sits on the clean, tested `fct_sales` dbt built.
+     The metric is only as trustworthy as the table under it.
+   - **Complement:** the Metric View is the natural fit for **Databricks-native**
+     consumption — Genie and AI/BI read it directly, governed by Unity Catalog.
+   - **Compete / where dbt wins:** the dbt definition is **version-controlled,
+     tested in CI, lives next to the model, and reaches any BI tool or agent via
+     MCP** — not bound to one warehouse. Note there's no `ref()`/lineage tie from a
+     hand-written Metric View back to the model, and no PR review of the metric
+     change.
+
+   > **dbt vs native:** author the metric once in dbt (governed, portable), and —
+   > where a team works entirely inside Databricks — *also* expose it as a Metric
+   > View. Better together, not either/or.
+   > (Docs: https://docs.databricks.com/aws/en/metric-views/.)
+5. **Connect the dbt MCP server to an AI agent.** First ensure **AI features are
    enabled** for the account (**Account Settings → enable AI**). The remote MCP
    endpoint is `https://<your-dbt-host>/api/ai/v1/mcp/` and needs your
    **production environment ID** (find it under Orchestration). Two options: any
@@ -637,17 +764,18 @@ The payoff module — the metrics layer makes the whole stack AI-ready.
      `total_revenue`, `avg_basket_value`, `revenue_per_customer`, no schema
      spelunking.
    - *"What was total revenue by customer region last month?"* → agent calls
-     `query_metrics` — THE governed number, computed through MetricFlow on
-     Databricks. Compare with letting an LLM write raw SQL against bronze:
-     plausible answer, confidently wrong number.
+     `query_metrics` — the governed metric, computed through MetricFlow on
+     Databricks, so every tool returns the same definition of revenue. An agent
+     left to improvise raw SQL against bronze has no such guardrail: the answer
+     looks plausible but can quietly diverge from the official number.
    - *"Where does `avg_basket_value` come from?"* → lineage tools trace metric →
      `fct_sales` → `int_sales__order_items` → Fivetran `sales_orders` source.
-5. **Genie on the gold layer.** Create a Genie space on `mart_customer_loyalty` +
+6. **Genie on the gold layer.** Create a Genie space on `mart_customer_loyalty` +
    `dim_customers` (or `mart_b2b_orders` + `fct_orders`). Because dbt built clean,
    documented, well-named Gold tables — and pushed column descriptions into Unity
    Catalog via `persist_docs` — Genie's answers get dramatically better. dbt is
    the data-quality foundation that makes Genie shine.
-6. **The joint story for the SA:** Databricks provides the compute, governance, and
+7. **The joint story for the SA:** Databricks provides the compute, governance, and
    Genie UX; dbt provides the trusted transformations and metric definitions; MCP
    makes both consumable by any agent. AI on the lakehouse is only as good as the
    data layer beneath it — and that layer is built with dbt, running on Databricks.
@@ -662,90 +790,68 @@ SQL-first analytics teams — often both in one account.)*
 
 ---
 
-# Objection handling: "our solution isn't technical, dbt adds engineering"
+# Positioning: dbt + Databricks, better together
 
-The most common challenge from Databricks SAs: *"Lakeflow Designer is no-code,
-Genie is natural language — why add dbt's engineering overhead?"* Counters, from
-reframe to receipts:
+This lab tells a **"better together"** story — not "dbt instead of Databricks."
+Databricks provides the lakehouse, the compute, Unity Catalog governance, and the
+Genie / AI consumption layer. dbt provides the SQL-based transformation workflow —
+tests, contracts, docs, lineage, Mesh, and a semantic layer — that produces the
+trusted, well-documented tables those AI experiences depend on. Every dbt run is
+Databricks SQL-warehouse consumption.
 
-## 1. Reframe: dbt is not "more engineering" — it's SQL
-A dbt model is a SELECT statement. The DAG, dependency order, materialization,
-incremental merge, docs, and lineage are all inferred or declared in YAML. No
-Spark, no Python, no API to learn — this 2h lab takes **dbt beginners** from raw
-Fivetran tables to a tested gold layer with a semantic layer on top. If the
-audience can write SQL, they can use dbt — the same skills bar as Lakeflow
-Designer's target user, with version control included.
+A few framing points for this audience:
 
-## 2. "No-code" is cheap on day 1 and expensive on day 400
-Ask: *how do you code-review a drag-and-drop pipeline? How do you diff it? Roll it
-back? Who maintains it when its author leaves?* dbt's answer is boring and proven:
-it's text in git — PRs, reviews, CI, rollback for free. No-code artifacts become
-unreviewable black boxes; the "engineering" wasn't removed, it was deferred to
-incident time. Even Databricks frames Designer as needing a *"bridge between
-no-code and pro-code"* — that bridge is exactly what dbt already is.
+- **dbt is SQL, not extra engineering.** A model is a `SELECT`; the DAG,
+  materializations, incremental logic, docs, and lineage are inferred or declared
+  in a few lines of YAML. Same skills bar as a SQL-first analyst, with version
+  control included.
+- **Version control comes for free.** Everything is text in git — PRs, code
+  review, CI, and rollback — the same software discipline Databricks promotes with
+  Asset Bundles and CI/CD, made accessible to analytics teams.
+- **AI is only as good as the data beneath it.** Genie and agents are strongest on
+  clean, tested, documented gold tables — exactly what dbt builds. The data
+  foundation is what makes the AI story land (Module 6).
+- **Databricks invests in dbt.** The dbt-databricks adapter, the native dbt
+  platform task in Lakeflow Jobs, and joint Fivetran + dbt reference architectures
+  are all maintained by Databricks. This is a partnership pattern, not a
+  competition.
 
-## 3. The comparison is backwards: DBX-native needs MORE code for the same outcome
+## Where we complement vs where we overlap
 
-| Outcome | dbt | DBX-native |
-| --- | --- | --- |
-| Data quality test | 2–4 lines of YAML (`unique`, `not_null`, `relationships`) | Expectations/DQX written in code |
-| SCD Type 2 history | One snapshot config block | AUTO CDC API or hand-written MERGE |
-| Incremental load | `is_incremental()` • one config | MERGE logic, checkpoints |
-| 147 HubSpot models | `dbt deps` — one line in packages.yml | Build them yourself |
-| Docs + column lineage | Auto-generated from code | UC lineage exists, but no docs-as-code |
-| Dev environment per person | A schema name | A cluster / workspace setup |
+Most of the stack is complementary. A few capabilities overlap with
+Databricks-native tooling — be clear and honest about which is which:
 
-If "less engineering" is the criterion, dbt wins the comparison they started.
+| Capability | dbt on Databricks | Databricks-native | Complement or overlap? |
+| --- | --- | --- | --- |
+| Source connectors (via Fivetran) | 700+ | ~10 managed SaaS connectors in Lakeflow Connect | **Complement** — dbt transforms what Fivetran/Lakeflow land |
+| Data quality tests | Declarative YAML, ~4 lines | DQX / expectations (code) | **Overlap** — dbt is less code, convention-driven |
+| SCD2 history | Snapshots: one config block | AUTO CDC / hand-written MERGE | **Overlap** — dbt is declarative |
+| Incremental load | `is_incremental()`, one config | MERGE logic + checkpoints | **Overlap** |
+| Prebuilt transform packages | Fivetran dbt packages, dbt_utils, dbt package hub | None comparable | **dbt-only** |
+| Docs + column-level lineage | Auto-generated, ties to exposures | Unity Catalog lineage (no docs-as-code) | **Complement** — UC governs data, dbt documents transforms |
+| State-aware builds | dbt State: skip/clone/auto-defer, semantic diff | Rebuild, or hand-rolled change detection | **dbt-only** |
+| Multi-team ownership | dbt Mesh: public models, contracts, cross-project ref | Separate workspaces, no contract semantics | **dbt-only** |
+| Metrics / semantic layer | dbt Semantic Layer: versioned, tested, portable via MCP | Unity Catalog Metric Views: warehouse-local, native BI/Genie | **Overlap** — author in dbt, expose natively where useful (Module 6.4) |
+| AI consumption | dbt MCP exposes metrics + lineage to any agent | Genie / AI/BI on UC tables | **Complement** — dbt builds the trusted data Genie reads |
+| Audience | SQL-fluent analytics engineers | Spark / Python data engineers | **Complement** — same lakehouse, different personas |
 
-## 4. "Simple" without tests = simple until it's wrong
-Genie and AI consumption raise the stakes: an agent answering from an untested,
-undocumented table is confidently wrong at scale. The reason Module 6's Genie demo
-works so well is that dbt built clean, tested, documented gold tables underneath
-it. **The "no engineering" pitch and the AI pitch contradict each other** — AI on
-the lakehouse is only as good as the discipline in the transformation layer.
+## If the conversation turns competitive
 
-## 5. Receipts: Databricks itself invests in dbt
-Databricks maintains the dbt-databricks adapter, ships a native **dbt platform
-task** in Lakeflow Jobs, and publishes joint Fivetran + dbt reference
-architectures. Their own engineering best practices (Asset Bundles, CI/CD,
-environments) are the same software practices dbt gives analytics teams out of the
-box. dbt isn't a competing philosophy — it's their philosophy, made accessible to
-SQL people.
-
-## Quick rebuttal one-liners
+The most common challenge from a Databricks SA is: *"Lakeflow Designer is no-code,
+Genie is natural language — why add dbt?"* Reframes, kept friendly:
 
 | They say | You say |
 | --- | --- |
 | "Designer is no-code" | "dbt is SQL-only — same skills bar, plus git, tests and CI for free. How do you code-review a canvas?" |
-| "dbt adds complexity" | "Four lines of YAML vs hand-written expectation code — which is complex?" |
-| "We have Declarative Pipelines" | "Great for Spark teams. Where do your customer's 50 SQL analysts work? They're already in dbt — bring that consumption here." |
-| "Genie means no modeling needed" | "Genie on raw bronze hallucinates. Genie on a dbt gold layer shines — we'll show both." |
-| "Metric Views replace the semantic layer" | "Metric Views are warehouse-local. dbt metrics are version-controlled, tested, and exposed to any agent via MCP." |
-| "This is just extra cost" | "Every dbt run is SQL warehouse consumption. dbt grows your workload, it doesn't tax it." |
+| "dbt adds complexity" | "Four lines of YAML vs hand-written expectation code — which is the complex one?" |
+| "We have Declarative Pipelines" | "Great for Spark teams. Your customer's SQL analysts already work in dbt — bring that consumption onto Databricks." |
+| "Genie means no modeling needed" | "Genie on raw bronze hallucinates; Genie on a dbt gold layer shines — Module 6 shows both." |
+| "Metric Views replace the semantic layer" | "They overlap on the definition — but dbt metrics are version-controlled, tested, and reach any agent via MCP. Author in dbt, expose as a Metric View where it helps." |
+| "This is just extra cost" | "Every dbt run is SQL-warehouse consumption — dbt grows the workload, it doesn't tax it. dbt State even removes the *wasted* compute." |
 
-*Tone tip for the room: agree that simplicity matters, then redefine it — "simple"
+*Tone for the room: agree that simplicity matters, then redefine it — "simple"
 should mean simple to trust, maintain, and hand over, not just simple to click
-together in a demo.*
-
----
-
-# dbt vs DBX-native: cheat sheet
-
-| Capability | dbt on Databricks | DBX-native equivalent |
-| --- | --- | --- |
-| Source connectors (via Fivetran) | 700+ | ~10 managed SaaS connectors in Lakeflow Connect (no Marketo) |
-| Data tests | Declarative YAML, 4 lines | DQX / expectations — more code, less convention |
-| Prebuilt transformation packages | Fivetran dbt packages, dbt_utils, 1000s on dbt package hub | None comparable |
-| SCD2 history | Snapshots: one config block | AUTO CDC / hand-written MERGE |
-| Docs + column-level lineage | Auto-generated, ties to exposures/dashboards | Unity Catalog lineage (table/column, but no docs-as-code) |
-| Dev environments | Per-developer schema, zero infra | Per-user clusters/notebooks |
-| CI/CD | Built into dbt platform (Slim CI, dbt State) | DABs — more setup, engineer-oriented |
-| State-aware builds | dbt State: skip/clone/auto-defer, semantic SQL diff, source-freshness aware | Rebuild everything, or hand-rolled change detection |
-| Multi-team / domain ownership | dbt Mesh: public models, contracts, cross-project ref + lineage | Separate workspaces; no contract semantics between teams |
-| Audience | SQL-fluent analytics engineers | Spark/Python data engineers |
-
-*Positioning note: this is "better together", not "instead of". Every dbt workload
-is Databricks SQL consumption.*
+together in a demo. The goal is "better together," not winning a debate.*
 
 ---
 
@@ -900,3 +1006,45 @@ DROP SCHEMA IF EXISTS main.<your_dev_schema> CASCADE;
 ```bash
 cd platform && dbt build
 ```
+
+---
+
+# Appendix E — showcase: dbt Wizard on a Databricks-served model (optional)
+
+> **Optional presenter demo.** This shows dbt Wizard running on a model served from
+> the customer's *own* Databricks workspace via the **Unity Catalog AI Gateway** —
+> so the agent's inference, governance, and cost all stay inside Databricks. It's a
+> **beta, CLI-only** capability, so it runs from the **Wizard CLI**, not the in-IDE
+> Wizard used in Module 3.9. If no serving endpoint is available, walk through this
+> as slides rather than running it live.
+
+**Prerequisites**
+- The **dbt Wizard CLI** installed (docs: https://docs.getdbt.com/docs/dbt-ai/wizard-cli).
+- A Databricks **model-serving endpoint** deployed in the workspace — e.g. a
+  foundation-model endpoint named `databricks-claude-sonnet-4-6` — and a
+  **Databricks PAT** (`dapi…`) with permission to query it.
+
+**Steps**
+1. Point Wizard at your workspace and configure the Databricks provider:
+   ```bash
+   export DATABRICKS_API_KEY="dapi..."
+   export DATABRICKS_API_BASE="https://adb-1234567890.azuredatabricks.net"
+   wizard providers configure databricks   # prompts for workspace URL + endpoint name per model
+   wizard providers enable databricks
+   wizard providers list                    # confirm databricks shows enabled / configured
+   wizard debug models                      # confirm the Databricks-served models resolve
+   ```
+2. (Optional) Set a Databricks-served model as the default in
+   `~/.dbt/wizard/config.toml`:
+   ```toml
+   model = "databricks/claude-sonnet-4-6"
+   ```
+3. From the `platform` project, run a Wizard task against the lab's own models —
+   e.g. *"Explain what `fct_sales` depends on and which consumer projects reference
+   it."* The answer is generated by a model served from **your** Databricks
+   workspace, governed by Unity Catalog.
+
+> **The SA line:** the customer's transformation agent *and* its LLM both run on
+> Databricks they already govern and pay for — dbt brings the project context,
+> Databricks serves the model. Better together, end to end.
+> (Docs: https://docs.getdbt.com/docs/dbt-ai/wizard-byok.)
